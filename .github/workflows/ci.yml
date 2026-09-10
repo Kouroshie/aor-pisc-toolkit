@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.12"]
+        include:
+          - os: ubuntu-latest
+            python: "3.13"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[full,dev]"
+
+      - name: Lint
+        run: ruff check src tests
+
+      - name: Test
+        run: pytest -q --cov=aorpisc --cov-report=term-missing
+
+      - name: Run the shipped example end to end
+        run: |
+          aorpisc threshold examples/epa_hypothetical_site.yaml
+          aorpisc run examples/epa_hypothetical_site.yaml -o ci-out
+          python - <<'PY'
+          import json, os
+          with open(os.path.join("ci-out", "epa_hypothetical_site_summary.json")) as fh:
+              s = json.load(fh)
+          area = s["aor"]["aor_area_acres"]
+          assert area > 0, "the example produced an empty AoR"
+          assert s["threshold"]["delta_p_critical_psi"] > 0
+          assert s["pisc"]["peak_plume_area_acres"] > 0
+          print(f"example AoR: {area:,.0f} acres")
+          PY
+
+      - name: Upload example outputs
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: example-outputs
+          path: ci-out/
+          retention-days: 14
+
+  build:
+    name: build the distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
