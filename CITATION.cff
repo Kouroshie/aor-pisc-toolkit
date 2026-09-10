@@ -1,0 +1,70 @@
+cff-version: 1.2.0
+title: "aorpisc: Area of Review and Post-Injection Site Care toolkit for UIC Class VI geologic carbon storage"
+message: "If you use this software, please cite it as below, together with the underlying sources it implements."
+type: software
+authors:
+  - family-names: Mahjour
+    given-names: Seyed
+repository-code: "https://github.com/Kouroshie/aor-pisc-toolkit"
+license: Apache-2.0
+version: 0.1.0
+keywords:
+  - carbon capture and storage
+  - geologic carbon sequestration
+  - UIC Class VI
+  - area of review
+  - post-injection site care
+  - reservoir simulation
+  - vertical equilibrium
+abstract: >-
+  An open-source Python toolkit for delineating the Area of Review (AoR) and
+  building the Post-Injection Site Care (PISC) demonstration for UIC Class VI
+  geologic carbon storage projects, following 40 CFR 146.84 and 146.93 and
+  EPA guidance 816-R-13-005. It implements four threshold-pressure methods,
+  analytical and vertical-equilibrium numerical flow models, importers for
+  external reservoir simulators, geometric AoR delineation with GIS export,
+  the EPA corrective-action decision tree with arrival-time phasing,
+  quantitative PISC metrics, and probabilistic AoR delineation by Monte Carlo.
+references:
+  - type: report
+    title: "Geologic Sequestration of Carbon Dioxide: UIC Program Class VI Well Area of Review Evaluation and Corrective Action Guidance"
+    authors:
+      - name: "United States Environmental Protection Agency, Office of Water"
+    year: 2013
+    number: "EPA 816-R-13-005"
+  - type: article
+    title: "Injection and storage of CO2 in deep saline aquifers: analytical solution for CO2 plume evolution during injection"
+    authors:
+      - family-names: Nordbotten
+        given-names: "Jan M."
+      - family-names: Celia
+        given-names: "Michael A."
+      - family-names: Bachu
+        given-names: Stefan
+    journal: "Transport in Porous Media"
+    volume: 58
+    year: 2005
+  - type: article
+    title: "Role of partial miscibility on pressure buildup due to constant rate injection of CO2 into closed and open brine aquifers"
+    authors:
+      - family-names: Mathias
+        given-names: "Simon A."
+      - family-names: Gluyas
+        given-names: "Jon G."
+      - family-names: "Gonzalez Martinez de Miguel"
+        given-names: "Gerardo J."
+      - family-names: Hosseini
+        given-names: "Seyyed A."
+    journal: "Water Resources Research"
+    volume: 47
+    year: 2011
+  - type: article
+    title: "Seismic properties of pore fluids"
+    authors:
+      - family-names: Batzle
+        given-names: Michael
+      - family-names: Wang
+        given-names: Zhijing
+    journal: Geophysics
+    volume: 57
+    year: 1992

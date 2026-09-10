@@ -1,0 +1,120 @@
+# ---------------------------------------------------------------------------
+# EPA's hypothetical geologic sequestration site
+#
+# Built from the conceptual site model in Box 3-1 of EPA 816-R-13-005 (UIC
+# Class VI Well Area of Review Evaluation and Corrective Action Guidance):
+# three injection wells, two million tonnes of CO2 per year for 30 years,
+# injection into a saline formation (Unit N) at ~1,800 m with 50,000 mg/L
+# salinity and 1-50 mD permeability, a shale primary confining zone (Unit M)
+# at least 20 m thick, and the lowermost USDW (Unit C) at 200-500 m.
+#
+# EPA deliberately publishes no length scale for this example, so the well
+# spacing and the formation properties inside the stated ranges are choices
+# made here.  It is a worked example, not a benchmark: use it to see the
+# whole workflow run, not to validate against a published AoR.
+# ---------------------------------------------------------------------------
+
+project:
+  name: EPA hypothetical GS site (Box 3-1)
+  operator: worked example
+  permit: n/a
+  datum: ground surface, depths positive downward
+  notes: >
+    Conceptual model from EPA 816-R-13-005 Box 3-1. The formation dips
+    slightly and migration is expected to be greater up-dip.
+
+units:
+  length: m
+  depth: m
+  pressure: MPa
+  temperature: C
+  permeability: mD
+  rate: MMT/yr
+  time: yr
+  compressibility: 1/Pa
+
+formation:
+  injection_zone:
+    top_depth: 1800
+    thickness: 120
+    porosity: 0.18
+    permeability: 50            # top of the 1-50 mD range stated in Box 3-1
+    temperature: 65
+    salinity_ppm: 50000
+    initial_pressure: 17.6      # hydrostatic at 1,800 m
+    rock_compressibility: 6.0e-10
+    dip_degrees: 1.0
+    dip_azimuth: 180            # dips south, so CO2 migrates north (up-dip)
+  confining_zone:
+    top_depth: 1770
+    base_depth: 1800            # Unit M shale, >= 20 m thick
+  usdw:
+    base_depth: 500             # Unit C, 200-500 m below ground surface
+    initial_pressure: 4.9       # hydrostatic
+    temperature: 25
+    salinity_ppm: 800
+
+relative_permeability:
+  model: brooks_corey
+  swr: 0.35
+  sgr: 0.20
+  krw0: 1.0
+  krg0: 0.30
+  m: 3.0
+  n: 3.0
+
+threshold:
+  method: auto                  # try every method, use the most protective
+  mud_weight_ppg: 9.0
+  gel_strength: 0.069           # 10 psi, in MPa
+
+wells:
+  - name: INJ-1
+    x: -1500
+    y: 0
+    kind: injector
+    rate: 0.667
+    start_year: 0
+    stop_year: 30
+  - name: INJ-2
+    x: 0
+    y: 0
+    kind: injector
+    rate: 0.667
+    start_year: 0
+    stop_year: 30
+  - name: INJ-3
+    x: 1500
+    y: 0
+    kind: injector
+    rate: 0.666
+    start_year: 0
+    stop_year: 30
+
+model:
+  engine: ve                    # analytical | ve
+  grid:
+    # Telescoping: 200 m cells over the well field, growing outward to a
+    # 40 km half-width so the pressure front closes well inside the domain.
+    cell_size: 200              # m, the fine cell
+    fine_half_width: 6000       # m
+    half_width: 40000           # m
+    growth: 1.14
+  boundary: constant_pressure   # a closed box never lets pressure dissipate
+  end_year: 230                 # 30 yr injection + 200 yr post-injection
+                                # long enough to demonstrate that plume
+                                # migration has actually ceased
+
+plume:
+  cutoff: 0.01
+  criterion: column-averaged CO2 saturation >= 0.01
+
+penetrations:
+  csv: examples/legacy_wells.csv
+  coordinate_unit: m
+
+uncertainty:
+  enabled: false
+  realisations: 200
+  spread: 0.5
+  seed: 0

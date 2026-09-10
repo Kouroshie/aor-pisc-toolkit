@@ -1,0 +1,13 @@
+name,api,type,status,x,y,total_depth,year_drilled,year_abandoned,plug_depths,plug_material,cased,records_complete,mit_passed,notes
+SL-0117,42-000-00001,oil,plugged,1800,-2600,6420,1953,1981,420;5750;6300,cement,true,true,,plug set across the Anahuac equivalent
+SL-0224,42-000-00002,gas,plugged,6900,2100,6180,1947,1959,600,cement,true,true,,single plug well above the confining zone
+SL-0331,42-000-00003,dry hole,plugged,-3400,4200,7050,1972,1973,500;5680;6900,cement,true,true,,modern three-plug abandonment
+SL-0402,42-000-00004,oil,abandoned,4200,8800,6600,1938,,,unknown,false,false,,records lost; cable-tool era open hole
+SL-0518,42-000-00005,injection,active,9800,4300,6350,2011,,,cement,true,true,true,Class II saltwater disposal into the same interval
+SL-0603,42-000-00006,water,plugged,2200,1400,780,1996,2009,150,cement,true,true,,shallow irrigation well above the USDW base
+SL-0714,42-000-00007,oil,plugged,-1200,7300,6480,1961,1988,540;6100,cast iron bridge plug,true,true,,mechanical plug only; not CO2 compatible
+SL-0822,42-000-00008,gas,plugged,12500,-5200,6720,1979,1994,500;5700;6600,cement,true,true,,expected outside the plume but inside the pressure front
+SL-0931,42-000-00009,oil,plugged,5600,-1100,6300,1958,1999,480;5900,cement,true,true,false,failed a pressure test before abandonment
+SL-1044,42-000-00010,stratigraphic test,plugged,3100,3900,7400,2019,2020,600;5680;7300,cement,true,true,,characterization well for this project
+SL-1157,42-000-00011,oil,plugged,-8900,-9400,6250,1966,1990,520;5820,cement,true,true,,far field
+SL-1263,42-000-00012,dry hole,plugged,15200,9100,6900,1984,1985,,unknown,true,,,no plugging record located

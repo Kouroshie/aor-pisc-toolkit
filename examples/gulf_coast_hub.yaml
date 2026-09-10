@@ -1,0 +1,142 @@
+# ---------------------------------------------------------------------------
+# Gulf Coast storage hub - a synthetic but realistic Texas-style project
+#
+# Exercises the parts of the toolkit the EPA hypothetical does not: a
+# staggered multi-well start-up, brine extraction for pressure management, the
+# TCEQ / Class I mud-column threshold method, a georeferenced coordinate
+# system, and the uncertainty analysis.
+#
+# The formation is loosely Frio-like: an under-pressurised, high-permeability
+# Gulf Coast sand under a thick shale, with the lowermost USDW about a
+# thousand feet down. Everything here is invented. It is not any real
+# project's data, and the numbers are not a benchmark.
+# ---------------------------------------------------------------------------
+
+project:
+  name: Gulf Coast Storage Hub (synthetic)
+  operator: worked example
+  permit: n/a
+  datum: ground surface, depths positive downward
+  crs:
+    # UTM zone 14N. With pyproj installed the GeoJSON and KML exports carry
+    # true longitude/latitude; without it they stay in model metres.
+    epsg: 32614
+  notes: >
+    Six-year staggered start-up across four injectors with one brine
+    extractor for pressure management. Threshold pressure follows the Texas
+    Class I convention of a static 9.0 lb/gal mud column plus gel strength.
+
+units:
+  length: ft
+  depth: ft
+  pressure: psi
+  temperature: F
+  permeability: mD
+  rate: MMT/yr
+  brine_rate: bbl/day
+  time: yr
+  compressibility: 1/psi
+
+formation:
+  injection_zone:
+    top_depth: 6000
+    thickness: 320             # net sand
+    porosity: 0.24
+    permeability: 350
+    temperature: 155
+    salinity_ppm: 75000
+    initial_pressure: 2481     # measured; under-pressurised for its depth
+    rock_compressibility: 6.0e-6
+    dip_degrees: 0.8
+    dip_azimuth: 135           # dips southeast, so CO2 migrates northwest
+  confining_zone:
+    top_depth: 5600
+    base_depth: 6000           # 400 ft of shale
+  usdw:
+    base_depth: 1050
+    initial_pressure: 455      # hydrostatic
+    temperature: 82
+    salinity_ppm: 1200
+
+relative_permeability:
+  model: brooks_corey
+  swr: 0.30
+  sgr: 0.25                    # strong residual trapping in a clean sand
+  krw0: 1.0
+  krg0: 0.35
+  m: 3.0
+  n: 3.0
+
+threshold:
+  # Texas Class I practice: the hypothetical conduit is assumed to stand full
+  # of 9.0 lb/gal mud that has developed a gel strength, rather than being an
+  # open brine-filled hole. Compare against method1 in the report output; the
+  # difference is large and it is a permitting decision, not a modelling one.
+  method: mud_column
+  mud_weight_ppg: 9.0
+  gel_strength: 10
+  mud_datum_depth: 6000        # measured from the wellhead, not from MSL
+
+wells:
+  - name: INJ-A1
+    x: 0
+    y: 0
+    rate: 0.9
+    start_year: 0
+    stop_year: 25
+
+  - name: INJ-A2
+    x: 5200
+    y: 900
+    rate: 0.9
+    start_year: 2
+    stop_year: 25
+
+  - name: INJ-B1
+    x: 2400
+    y: 6100
+    # a stepped schedule: ramps up, then throttles back late in life
+    schedule:
+      - {year: 4,  rate: 0.5}
+      - {year: 8,  rate: 1.1}
+      - {year: 20, rate: 0.6}
+      - {year: 25, rate: 0.0}
+
+  - name: INJ-B2
+    x: 7600
+    y: 5400
+    rate: 0.8
+    start_year: 6
+    stop_year: 25
+
+  - name: EXT-1
+    x: 3900
+    y: 3100
+    kind: extractor
+    rate: 9000                 # bbl/day of brine, for pressure management
+    start_year: 4
+    stop_year: 25
+
+model:
+  engine: ve
+  grid:
+    cell_size: 400             # ft, over the well field
+    fine_half_width: 18000     # ft
+    half_width: 95000          # ft, about 18 mi to the domain edge
+    growth: 1.12
+  boundary: constant_pressure  # a laterally extensive Gulf Coast sand
+  end_year: 125                # 25 yr injection + 100 yr post-injection
+
+plume:
+  cutoff: 0.02
+  criterion: column-averaged CO2 saturation >= 0.02
+
+penetrations:
+  csv: examples/gulf_coast_wells.csv
+  coordinate_unit: ft
+
+uncertainty:
+  enabled: true
+  realisations: 80
+  spread: 0.5
+  seed: 42

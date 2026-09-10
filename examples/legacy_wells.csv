@@ -1,0 +1,11 @@
+name,api,type,status,x,y,total_depth,year_drilled,year_abandoned,plug_depths,plug_material,cased,records_complete,mit_passed,notes
+LEGACY-01,42-000-00001,oil,plugged,-2400,900,1950,1948,1951,300;1900,cement,true,true,,pre-API-standard abandonment
+LEGACY-02,42-000-00002,dry hole,plugged,1200,-2200,2050,1974,1976,450;1780;1990,cement,true,true,,plug set across the confining zone
+LEGACY-03,42-000-00003,gas,plugged,3400,1800,1920,1962,1988,600,cement,true,true,,no plug at confining-zone depth
+LEGACY-04,42-000-00004,oil,abandoned,-900,-3600,1875,1955,,,unknown,false,false,,"open hole; records lost in county fire"
+LEGACY-05,42-000-00005,injection,active,4800,-400,1960,2009,,,cement,true,true,true,Class II saltwater disposal into the same interval
+LEGACY-06,42-000-00006,water,plugged,-6200,3100,420,1991,2004,120,cement,true,true,,shallow water well
+LEGACY-07,42-000-00007,oil,plugged,7600,5200,1990,1958,1980,700;1840,cast iron bridge plug,true,true,,mechanical plug only
+LEGACY-08,42-000-00008,dry hole,plugged,-11500,-8200,2100,1981,1983,500;1795;2050,cement,true,true,,outside the expected AoR
+LEGACY-09,42-000-00009,oil,plugged,600,4200,1880,1969,1994,350;1830,cement,true,true,false,failed MIT before abandonment
+LEGACY-10,42-000-00010,stratigraphic test,plugged,-4300,-1200,2200,2015,2016,600;1790;2150,cement,true,true,,modern abandonment
