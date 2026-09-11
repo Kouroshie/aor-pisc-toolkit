@@ -203,6 +203,29 @@ def _project_from_form() -> dict:
     }
 
 
+def _rows(edited) -> list[dict]:
+    """Rows out of st.data_editor, whatever shape this Streamlit hands back.
+
+    The editor returns "the same type as the input", but the exact spelling has
+    moved between versions: a list of dicts here, a DataFrame there, and a
+    version that skips the first row of a list default. Reading the rows
+    through one helper keeps a version difference from quietly costing an
+    injection zone, which is how a stacked project collapsed to a single zone
+    on the deployed app while passing locally.
+    """
+    if edited is None:
+        return []
+    if hasattr(edited, "to_dict"):                    # a pandas DataFrame
+        return [dict(r) for r in edited.to_dict("records")]
+    out = []
+    for r in edited:
+        if isinstance(r, dict):
+            out.append(dict(r))
+        elif hasattr(edited, "loc"):                  # an index, not a row
+            out.append(dict(edited.loc[r]))
+    return out
+
+
 _ZONE_COLUMNS = ("name", "top_depth", "thickness", "porosity", "permeability",
                  "temperature", "salinity_ppm", "initial_pressure",
                  "confining_top", "confining_base")
@@ -236,7 +259,7 @@ def _zone_editor() -> list[dict] | None:
          "salinity_ppm": 90000.0, "initial_pressure": 2600.0,
          "confining_top": 5700.0, "confining_base": 6000.0},
     ]
-    rows = st.data_editor(default, num_rows="dynamic", key="zones")
+    rows = _rows(st.data_editor(default, num_rows="dynamic", key="zones"))
     out = []
     for r in rows:
         if not str(r.get("name") or "").strip():
@@ -248,6 +271,13 @@ def _zone_editor() -> list[dict] | None:
             z["confining_zone"] = {"top_depth": r["confining_top"],
                                    "base_depth": r["confining_base"]}
         out.append(z)
+
+    if len(out) < 2:
+        st.warning(
+            f"The zone table produced {len(out)} usable row(s), so this is not "
+            "a stacked project. Every row needs a name, and a stack needs at "
+            "least two. Untick the box above to go back to the single "
+            "injection zone in the sidebar.")
     return out or None
 
 
@@ -270,7 +300,7 @@ def _well_editor(zones: list[dict] | None = None) -> list[dict]:
         # rate gets split by k*h
         for row in default:
             row["zone"] = ""
-    edited = st.data_editor(default, num_rows="dynamic", key="wells")
+    edited = _rows(st.data_editor(default, num_rows="dynamic", key="wells"))
     return [dict(r, kind="injector") for r in edited if r.get("name")]
 
 
@@ -324,6 +354,14 @@ try:
 except Exception as exc:
     st.error(f"Could not read the project: {exc}")
     st.stop()
+
+if project.is_stacked:
+    st.caption(
+        "Stacked completion: "
+        + ", ".join(f"**{z.name}** ({U.length_out(z.top_depth, 'ft'):,.0f} ft, "
+                    f"{U.length_out(z.thickness, 'ft'):,.0f} ft net)"
+                    for z in project.zones)
+        + ". Each is delineated separately and the project AoR is their union.")
 
 for w in project.warnings:
     st.warning(w)
