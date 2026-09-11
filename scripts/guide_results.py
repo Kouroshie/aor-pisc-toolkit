@@ -248,11 +248,17 @@ if ca:
           caption="The corrective-action summary.")
 table(pick(D.get("corrective_table", []),
            ["name", "type", "status", "in_aor", "penetrates_confining_zone",
-            "action", "priority", "pressure_arrival_yr", "plume_arrival_yr",
-            "reason"],
+            "action", "priority", "pressure_arrival_yr", "plume_arrival_yr"],
            limit=25),
       caption="Well-by-well determination, following EPA's Figure 4-3 decision "
-              "tree.")
+              "tree. Arrival years are blank where the model never brings "
+              "pressure or CO2 to that well.")
+p("Each determination carries a written reason, which is too long for the "
+  "table above and is the part a reviewer reads. Two examples from this run:")
+for _row in D.get("corrective_table", [])[:2]:
+    if _row.get("reason"):
+        indent(bullet(f"{_row.get('name')}: {_row['reason']}"))
+p("The full reasons are in corrective_action.csv and in the HTML report.")
 phases = D.get("corrective_phases", {})
 if isinstance(phases, dict) and phases:
     rows = []

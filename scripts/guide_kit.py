@@ -138,9 +138,25 @@ def table(rows: list[dict], columns=None, caption: str = "", max_rows: int = 40,
         cells = t.add_row().cells
         for i, c in enumerate(cols):
             v = row.get(c, "")
+            if isinstance(v, (list, tuple, dict)) and not v:
+                v = "none"       # "[]" in a permit table reads as a defect
+            elif isinstance(v, (list, tuple)):
+                v = ", ".join(str(x) for x in v)
             if isinstance(v, float):
-                v = (f"{v:,.3g}" if abs(v) < 0.01 and v != 0 else f"{v:,.2f}")
-            cells[i].text = str(v)
+                import math
+
+                if math.isnan(v):
+                    v = "-"          # "nan" in a permit table reads as an error
+                else:
+                    v = (f"{v:,.3g}" if abs(v) < 0.01 and v != 0
+                         else f"{v:,.2f}")
+            text = str(v)
+            # A free-text column can be hundreds of characters long, and Word
+            # will happily give one row a whole page. Trim, and point at the
+            # CSV export for the full text.
+            if len(text) > 70:
+                text = text[:67].rstrip() + "..."
+            cells[i].text = text
             for par in cells[i].paragraphs:
                 for run in par.runs:
                     run.font.size = Pt(8.5)

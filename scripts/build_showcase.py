@@ -187,7 +187,8 @@ exporters.save_npz(os.path.join(EXP, "fields.npz"), res.x, res.y, res.times,
                    dp=res.dp_fields, plume=res.plume_fields)
 note("io.exporters.save_npz")
 
-report.write_html(res, os.path.join(EXP, "containment_report.html"))
+report.write_html(res, os.path.join(EXP, "containment_report.html"),
+                  basemaps=True)   # all four maps open the report
 note("report.build_html")
 report.write_json(res, os.path.join(EXP, "summary.json"))
 note("report.write_json")
@@ -218,6 +219,17 @@ try:
     gis_note = ctx.note
     note("gis.MapContext.from_project")
     note("gis.map_html")
+
+    # The same delineation on each basemap, as figures a document can hold.
+    for key in gis.BASEMAPS:
+        try:
+            fig(f"gis_{key}", gis.static_map(
+                res.aor, ctx, basemap=key, wells=project.wells,
+                penetrations=res.corrective))
+        except Exception as exc:
+            print(f"     (static {key} map skipped: {exc})")
+    note("gis.static_map")
+    note("gis.static_map_set")
 except Exception as exc:
     print("     (GIS map skipped:", exc, ")")
 
@@ -235,14 +247,16 @@ try:
                                 strict=True):
             fh.write(f"{xi:.2f},{yi:.2f},{U.pressure_out(float(d), 'psi'):.4f},"
                      f"{float(g):.5f}\n")
-    grid = importers.load_grid_csv(sim_csv, x="x", y="y",
-                                   pressure="dp", saturation="sg",
-                                   pressure_unit="psi", length_unit="m")
+    grid = importers.load_grid_csv(
+        sim_csv, x_col="x", y_col="y", time_col=None,
+        dp_col="dp", plume_col="sg",
+        pressure_unit="psi", length_unit="m")
     note("io.importers.load_grid_csv")
     imported = delineate.delineate(
-        grid.x, grid.y, dp_field=grid.pressure,
+        grid.x, grid.y, dp_field=delineate.envelope(grid.dp),
         threshold_pressure=res.selected_threshold.delta_p_critical,
-        plume_field=grid.saturation, plume_level=project.plume_cutoff,
+        plume_field=delineate.envelope(grid.plume),
+        plume_level=project.plume_cutoff,
         plume_criterion=project.plume_criterion,
         method="imported simulator output")
     imp = {"area_acres": imported.area_acres,

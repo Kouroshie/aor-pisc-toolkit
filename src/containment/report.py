@@ -157,8 +157,15 @@ figure img{background:#232321}}
 
 # ==========================================================================
 def build_html(result, *, include_figures: bool = True,
-               title: str | None = None, theme: str = "light") -> str:
-    """Render a :class:`containment.workflow.ProjectResult` as one HTML document."""
+               title: str | None = None, theme: str = "light",
+               basemaps=("satellite",)) -> str:
+    """Render a :class:`containment.workflow.ProjectResult` as one HTML document.
+
+    ``basemaps`` chooses which static basemap figures open the report: a tuple
+    of keys from :data:`containment.gis.BASEMAPS`, ``True`` for all of them, or
+    a falsy value for none. Each one is a network fetch of map tiles, so the
+    default is the single most useful view rather than the full set.
+    """
     p = result.project
     s = result.summary()
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -169,6 +176,33 @@ def build_html(result, *, include_figures: bool = True,
         matplotlib.use("Agg")
 
         wells = [w for w in p.wells]
+
+        # The AoR on real imagery goes first. A reviewer's first question is
+        # where this is and what is inside the line, and a map answers it
+        # before any contour plot does. Tiles come off the network, so this is
+        # best-effort: without a connection the report simply starts at the
+        # delineation instead.
+        if basemaps:
+            try:
+                from . import gis
+
+                ctx_static = gis.MapContext.from_project(p)
+                for key in (basemaps if isinstance(basemaps, (list, tuple))
+                            else list(gis.BASEMAPS)):
+                    spec = gis.BASEMAPS.get(key, {})
+                    figs.append((
+                        f"Area of Review on {spec.get('name', key)}",
+                        "The delineation on a real basemap, with the injection "
+                        "wells and every artificial penetration coloured by "
+                        "the action it needs. "
+                        + str(spec.get("attr") or "OpenStreetMap contributors")
+                        + ".",
+                        _fig_to_b64(gis.static_map(
+                            result.aor, ctx_static, basemap=key, wells=wells,
+                            penetrations=result.corrective, theme=theme))))
+            except Exception:
+                pass                    # no georeferencing, or no network
+
         figs.append((
             "Delineated Area of Review",
             "The AoR is the union of the maximum-over-time CO2 plume and the "

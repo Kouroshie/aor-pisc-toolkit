@@ -68,19 +68,52 @@ p("Area of Review, corrective action and post-injection site care",
 p("A complete user guide, from nothing to a finished permit demonstration",
   size=12, italic=True, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=24)
 
+p(f"Every number, table and figure in this guide came from one run of the "
+  f"worked example on {D['generated']}. Nothing here is illustrative. That run "
+  f"exercised {len(D['functions_used'])} toolkit entry points, produced "
+  f"{len(D['figures'])} figures and {len(D['exports'])} export files, and took "
+  f"{num(D['runtime_s'])} seconds.",
+  italic=True, size=9.5, colour=MUTED, align=WD_ALIGN_PARAGRAPH.CENTER,
+  space_after=14)
+
 figure("aor_map",
        "The finished product: the Area of Review for the worked example used "
        "throughout this guide, with its two components, the injection wells, "
        "and every artificial penetration colour-coded by the action it needs.",
-       width=5.6)
+       width=5.3)
+page_break()
 
-p(f"Every number, table and figure in this guide came from one run of the "
-  f"worked example on {D['generated']}. Nothing here is illustrative.",
-  italic=True, size=9.5, colour=MUTED, align=WD_ALIGN_PARAGRAPH.CENTER)
-p(f"That run exercised {len(D['functions_used'])} toolkit entry points, "
-  f"produced {len(D['figures'])} figures and {len(D['exports'])} export files, "
-  f"and took {num(D['runtime_s'])} seconds.",
-  italic=True, size=9.5, colour=MUTED, align=WD_ALIGN_PARAGRAPH.CENTER)
+# ==========================================================================
+h(1, "The site")
+p("Before anything else, here is where this project is and what its Area of "
+  "Review covers, on four basemaps. Every later figure in this guide is a "
+  "version of this picture with the basemap stripped away, so it is worth "
+  "spending a moment on: the dashed line is the AoR that goes in the permit, "
+  "the triangles are the injection wells, and the crosses and circles are "
+  "artificial penetrations coloured by the action each one needs.")
+
+_MAPS = [
+    ("gis_satellite", "Satellite imagery. The basemap to send to a landman or "
+                      "a surface owner: it shows what is actually on the "
+                      "ground inside the boundary, which is the first "
+                      "question anyone asks."),
+    ("gis_streets", "Streets. Roads, place names and parcel context, which is "
+                    "what a public meeting or a notification letter needs."),
+    ("gis_topo", "Topographic. Drainage, contours and cultural features, for "
+                 "siting monitoring wells and planning access."),
+    ("gis_terrain", "Shaded relief. Strips the clutter and shows the "
+                    "landform, which is useful when the AoR crosses a "
+                    "meaningful break in terrain."),
+]
+for _name, _cap in _MAPS:
+    figure(_name, _cap, width=6.0)
+
+callout("These are static figures of a live map",
+        "The same content is produced as an interactive HTML map that opens "
+        "offline in any browser, with switchable basemaps, a layer switcher, "
+        "a measuring tool and a popup on every well carrying its "
+        "determination and modelled arrival year. Section 9 covers it. Send "
+        "the HTML when you can; use these when the destination is a document.")
 page_break()
 
 # ==========================================================================

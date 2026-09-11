@@ -35,6 +35,7 @@ an unstated datum is not evidence.
 
 from __future__ import annotations
 
+import io
 import json
 from dataclasses import dataclass
 
@@ -391,5 +392,224 @@ def map_html(result, ctx: MapContext, **kw) -> str:
     return build_map(result, ctx, **kw).get_root().render()
 
 
+# ==========================================================================
+# a static map, for documents that cannot hold a web page
+# ==========================================================================
+_OSM_TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+_TILE_SIZE = 256
+
+
+def _deg2num(lon: float, lat: float, z: int) -> tuple[float, float]:
+    """Longitude and latitude to fractional slippy-map tile coordinates."""
+    lat_r = np.radians(lat)
+    n = 2.0 ** z
+    x = (lon + 180.0) / 360.0 * n
+    y = (1.0 - np.log(np.tan(lat_r) + 1.0 / np.cos(lat_r)) / np.pi) / 2.0 * n
+    return x, y
+
+
+def _num2deg(x: float, y: float, z: int) -> tuple[float, float]:
+    n = 2.0 ** z
+    lon = x / n * 360.0 - 180.0
+    lat = np.degrees(np.arctan(np.sinh(np.pi * (1.0 - 2.0 * y / n))))
+    return lon, lat
+
+
+def _tile_url(basemap: str, z: int, x: int, y: int) -> str:
+    spec = BASEMAPS.get(basemap, BASEMAPS["satellite"])
+    tiles = spec["tiles"]
+    if not isinstance(tiles, str) or tiles.lower() == "openstreetmap":
+        tiles = _OSM_TILES
+    return (tiles.replace("{z}", str(z)).replace("{x}", str(x))
+            .replace("{y}", str(y)).replace("{s}", "a"))
+
+
+def _fetch_tiles(bounds, basemap: str, width_px: int = 1100, timeout: float = 20.0):
+    """Download and stitch the basemap tiles covering ``bounds``.
+
+    ``bounds`` is (west, south, east, north) in degrees. Returns the mosaic as
+    an array together with its extent in degrees, or None when the tiles
+    cannot be fetched, which is the normal outcome on a machine with no
+    network and must not be fatal.
+    """
+    import urllib.request
+    from concurrent.futures import ThreadPoolExecutor
+
+    try:
+        import matplotlib.image as mpimg
+    except ImportError:
+        return None
+
+    west, south, east, north = bounds
+    # pick the zoom whose tiles give at least the requested width
+    zoom = 2
+    for z in range(2, 19):
+        x0, _ = _deg2num(west, north, z)
+        x1, _ = _deg2num(east, south, z)
+        if (x1 - x0) * _TILE_SIZE >= width_px:
+            zoom = z
+            break
+        zoom = z
+
+    x0f, y0f = _deg2num(west, north, zoom)
+    x1f, y1f = _deg2num(east, south, zoom)
+    x0, x1 = int(np.floor(x0f)), int(np.floor(x1f))
+    y0, y1 = int(np.floor(y0f)), int(np.floor(y1f))
+    if (x1 - x0 + 1) * (y1 - y0 + 1) > 144:      # keep the request polite
+        return None
+
+    def one(args):
+        tx, ty = args
+        url = _tile_url(basemap, zoom, tx, ty)
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "containment/0.1 (UIC Class VI toolkit)"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as fh:
+                return (tx, ty, mpimg.imread(io.BytesIO(fh.read()), format="png"
+                                             if url.endswith(".png") else "jpeg"))
+        except Exception:
+            return (tx, ty, None)
+
+    coords = [(tx, ty) for tx in range(x0, x1 + 1) for ty in range(y0, y1 + 1)]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        tiles = list(pool.map(one, coords))
+    if all(t[2] is None for t in tiles):
+        return None
+
+    nx, ny = x1 - x0 + 1, y1 - y0 + 1
+    mosaic = np.ones((ny * _TILE_SIZE, nx * _TILE_SIZE, 3), dtype=float) * 0.93
+    for tx, ty, img in tiles:
+        if img is None:
+            continue
+        arr = np.asarray(img, dtype=float)
+        if arr.max() > 1.5:
+            arr = arr / 255.0
+        arr = arr[..., :3] if arr.ndim == 3 else np.dstack([arr] * 3)
+        r0 = (ty - y0) * _TILE_SIZE
+        c0 = (tx - x0) * _TILE_SIZE
+        mosaic[r0:r0 + arr.shape[0], c0:c0 + arr.shape[1]] = arr
+
+    w_deg, n_deg = _num2deg(x0, y0, zoom)
+    e_deg, s_deg = _num2deg(x1 + 1, y1 + 1, zoom)
+    return mosaic, (w_deg, e_deg, s_deg, n_deg)
+
+
+def static_map(result, ctx: MapContext, *, basemap: str = "satellite",
+               wells=None, penetrations=None, title: str = "",
+               theme: str = "light", figsize=(9.0, 8.0), pad: float = 0.35,
+               ax=None):
+    """The AoR on a real basemap, as a matplotlib figure.
+
+    The interactive map is the better artefact and cannot be pasted into a
+    permit application, a board paper or a Word document. This draws the same
+    content on stitched basemap tiles so it can be.
+
+    Requires a network connection for the tiles. Without one the geometry is
+    still drawn, on a plain background, and the figure says so rather than
+    failing.
+    """
+    import matplotlib.pyplot as plt
+
+    from . import viz
+
+    p = viz.palette(theme)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure
+
+    def to_lonlat(geom):
+        from shapely.ops import transform
+
+        return transform(lambda x, y, z=None: ctx.crs.to_lonlat(x, y), geom)
+
+    aor = to_lonlat(result.aor)
+    west, south, east, north = aor.bounds
+    dx, dy = (east - west) or 0.01, (north - south) or 0.01
+    bounds = (west - pad * dx, south - pad * dy, east + pad * dx, north + pad * dy)
+
+    fetched = _fetch_tiles(bounds, basemap)
+    if fetched is not None:
+        mosaic, (w, e, s, n) = fetched
+        ax.imshow(mosaic, extent=(w, e, s, n), origin="upper",
+                  interpolation="bilinear", zorder=0)
+    else:
+        ax.set_facecolor(p["surface"])
+        ax.text(0.5, 0.02, "basemap tiles unavailable offline; geometry only",
+                transform=ax.transAxes, ha="center", fontsize=8,
+                color=p["ink_3"])
+
+    def draw(geom, colour, lw, label, ls="-", fill=None):
+        if geom is None or geom.is_empty:
+            return
+        g = to_lonlat(geom)
+        first = True
+        for poly in (g.geoms if hasattr(g, "geoms") else [g]):
+            xy = np.asarray(poly.exterior.coords)
+            if fill:
+                ax.fill(xy[:, 0], xy[:, 1], color=fill, zorder=2, lw=0)
+            ax.plot(xy[:, 0], xy[:, 1], color=colour, lw=lw, ls=ls, zorder=3,
+                    label=label if first else None)
+            first = False
+
+    draw(result.pressure_front, p["series"][viz.PRESSURE_COLOR], 2.0,
+         "pressure front", fill=(0.16, 0.47, 0.84, 0.12))
+    draw(result.plume, p["series"][viz.PLUME_COLOR], 2.0, "CO2 plume",
+         fill=(0.92, 0.41, 0.20, 0.16))
+    draw(result.aor, p["ink"], 3.0,
+         f"AoR - {result.area_acres:,.0f} acres", ls="--")
+
+    if wells:
+        for kind, marker, colour, label in (
+                ("injector", "v", p["ink"], "CO2 injector"),
+                ("extractor", "^", p["series"][2], "brine extractor")):
+            sel = [w for w in wells if getattr(w, "kind", "injector") == kind]
+            if not sel:
+                continue
+            lon, lat = zip(*[ctx.crs.to_lonlat(w.x, w.y) for w in sel],
+                           strict=True)
+            ax.scatter(lon, lat, s=110, marker=marker, color=colour,
+                       edgecolor="white", linewidth=1.6, zorder=6, label=label)
+
+    if penetrations is not None:
+        colours = {"corrective action": p["critical"],
+                   "field testing": p["warning"],
+                   "monitor": p["ink_2"], "no action": p["ink_3"]}
+        wells_list = getattr(penetrations, "wells", penetrations) or []
+        for action, colour in colours.items():
+            sel = [w for w in wells_list
+                   if getattr(w, "in_aor", False) and getattr(w, "action", "") == action]
+            if not sel:
+                continue
+            lon, lat = zip(*[ctx.crs.to_lonlat(w.x, w.y) for w in sel],
+                           strict=True)
+            ax.scatter(lon, lat, s=55, marker="X" if action == "corrective action"
+                       else "o", color=colour, edgecolor="white", linewidth=1.0,
+                       zorder=7, label=f"{action} ({len(sel)})")
+
+    ax.set_xlim(bounds[0], bounds[2])
+    ax.set_ylim(bounds[1], bounds[3])
+    ax.set_xlabel("longitude")
+    ax.set_ylabel("latitude")
+    name = BASEMAPS.get(basemap, {}).get("name", basemap)
+    ax.set_title(title or f"Area of Review on {name}", loc="left",
+                 fontsize=12, color=p["ink"])
+    attr = BASEMAPS.get(basemap, {}).get("attr") or "OpenStreetMap contributors"
+    ax.text(0.995, 0.01, str(attr), transform=ax.transAxes, ha="right",
+            fontsize=7, color="white",
+            bbox=dict(facecolor="black", alpha=0.35, pad=1.5, edgecolor="none"))
+    leg = ax.legend(loc="upper right", fontsize=8, framealpha=0.92)
+    leg.set_zorder(8)
+    ax.set_aspect(1.0 / np.cos(np.radians(0.5 * (bounds[1] + bounds[3]))))
+    fig.tight_layout()
+    return fig
+
+
+def static_map_set(result, ctx: MapContext, *, basemaps=None, **kw):
+    """One static map per basemap. Returns {basemap key: figure}."""
+    keys = list(basemaps or BASEMAPS)
+    return {k: static_map(result, ctx, basemap=k, **kw) for k in keys}
+
+
 __all__ = ["HAVE_FOLIUM", "BASEMAPS", "MapContext", "build_map", "write_map",
-           "map_html"]
+           "map_html", "static_map", "static_map_set"]
