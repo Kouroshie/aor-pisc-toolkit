@@ -391,6 +391,11 @@ table([
             "with the citation on every section."},
     {"File": "corrective_action.csv", "Give it to": "The well-work planner",
      "Why": "Every penetration, its determination and its arrival time."},
+    {"File": "project_inputs.xlsx", "Give it to":
+        "The reservoir engineer, the geologist, anyone filling in data",
+     "Why": "Every input in one workbook, a sheet per part of the project. It "
+            "loads straight back in, so a colleague can set up a run without "
+            "opening a text editor."},
     {"File": "project.yaml", "Give it to": "Anyone who must reproduce the run",
      "Why": "The complete record of what was modelled. Part of what 146.84(g) "
             "asks you to retain for ten years."},
@@ -400,6 +405,27 @@ table([
     {"File": "summary.json", "Give it to": "Downstream tools, dashboards",
      "Why": "Every number in the run, machine-readable."},
 ])
+h(2, "8.1 The Excel workbook")
+p("The workbook is the same project as the YAML file, in the format most "
+  "teams actually work in. One sheet per part: Project, Units, Injection "
+  "zones (one row per zone, each with its own confining interval), USDW, "
+  "Relative permeability, Threshold, Model, Plume, Wells, Faults, "
+  "Penetrations and Uncertainty. The penetration list travels inside the "
+  "workbook rather than as a separate CSV.")
+code('containment run project.xlsx        # the CLI takes either format\n'
+     '\n'
+     '# or in Python\n'
+     'from containment.config import Project\n'
+     'project = Project.load("project.xlsx")',
+     "A workbook is a project file. Nothing else changes.")
+callout("Units are not converted, in either direction",
+        "Every number on every sheet is in the units declared on the Units "
+        "sheet. Change a unit there and you change how every number on the "
+        "other sheets is read. A spreadsheet that silently converts is worse "
+        "than no spreadsheet, so this one does not.")
+p("In the browser app: 'All inputs (Excel workbook)' in the Export panel "
+  "writes it, and 'Upload project' at the top of the page reads it back.")
+
 p("Files this run actually produced: " + ", ".join(D.get("exports", [])) + ".")
 
 # ==========================================================================
