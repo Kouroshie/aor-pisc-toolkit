@@ -323,17 +323,35 @@ with st.expander("New here? How this works, in one minute", expanded=False):
         "row has a quick start, a glossary, and an honest account of where "
         "this tool should not be trusted.")
 
-mode = st.radio("Start from", ["Form", "Upload project YAML", "Shipped example"],
+mode = st.radio("Start from", ["Form", "Upload project", "Shipped example"],
                 horizontal=True, label_visibility="collapsed",
                 help="Form builds a project from the sidebar. Shipped example "
                      "is the fastest way to see a finished run.")
 
 proj_dict = None
-if mode == "Upload project YAML":
-    up = st.file_uploader("project file", type=["yaml", "yml"])
+if mode == "Upload project":
+    up = st.file_uploader("project file", type=["yaml", "yml", "xlsx"],
+                          help="A YAML project file, or the Excel workbook "
+                               "this app writes from the Export panel.")
     if up is not None:
-        import yaml
-        proj_dict = yaml.safe_load(up.getvalue().decode("utf-8"))
+        if up.name.lower().endswith(".xlsx"):
+            # the workbook reader needs a real file, and it writes the
+            # penetration list out beside it
+            import tempfile
+
+            from containment.io import workbook
+
+            tmpdir = st.session_state.get("_upload_dir")
+            if tmpdir is None:
+                tmpdir = st.session_state["_upload_dir"] = tempfile.mkdtemp(
+                    prefix="containment-upload-")
+            book = os.path.join(tmpdir, up.name)
+            with open(book, "wb") as fh:
+                fh.write(up.getvalue())
+            proj_dict = workbook.from_excel(book)
+        else:
+            import yaml
+            proj_dict = yaml.safe_load(up.getvalue().decode("utf-8"))
 elif mode == "Shipped example":
     files = sorted(f for f in os.listdir(EXAMPLES) if f.endswith((".yaml", ".yml")))
     pick = st.selectbox("example", files)
@@ -575,6 +593,32 @@ with T["GIS map"]:
         _embed_html(html, height=640)
         st.download_button("Download this map as a standalone HTML file", html,
                            "aor_map.html", "text/html")
+
+        st.write("**The same map as a picture, for documents**")
+        st.caption(H["static_map"])
+        cols = st.columns(len(gis.BASEMAPS))
+        for col, key in zip(cols, gis.BASEMAPS, strict=True):
+            with col:
+                if st.button(gis.BASEMAPS[key]["name"], key=f"static_{key}",
+                             **_FULL_WIDTH):
+                    st.session_state["_static_basemap"] = key
+        chosen = st.session_state.get("_static_basemap")
+        if chosen:
+            with st.spinner(f"fetching {gis.BASEMAPS[chosen]['name']} tiles"):
+                try:
+                    figure = gis.static_map(
+                        res.aor, ctx, basemap=chosen, wells=project.wells,
+                        penetrations=res.corrective,
+                        title=f"{project.name} - Area of Review")
+                    buf = io.BytesIO()
+                    figure.savefig(buf, dpi=200, bbox_inches="tight",
+                                   facecolor=figure.get_facecolor())
+                    st.pyplot(figure)
+                    st.download_button(
+                        f"Download the {gis.BASEMAPS[chosen]['name']} map (PNG)",
+                        buf.getvalue(), f"aor_{chosen}.png", "image/png")
+                except Exception as exc:
+                    st.warning(f"the basemap tiles could not be fetched: {exc}")
         st.caption("The downloaded file opens offline in any browser, with the "
                    "basemaps, the layer switcher and the measuring tool intact. "
                    "It is the artefact to send to a landman, a field inspector "
@@ -734,6 +778,24 @@ with T["Export"]:
     st.download_button("Result summary (JSON)",
                        json.dumps(report._clean(s), indent=2, default=str),
                        "summary.json", "application/json")
+    try:
+        from containment.io import workbook as _workbook
+
+        _book = io.BytesIO()
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as _fh:
+            _tmp_book = _fh.name
+        _workbook.to_excel(project, _tmp_book,
+                           penetrations_csv=project.penetrations_csv or None)
+        with open(_tmp_book, "rb") as _fh:
+            _book.write(_fh.read())
+        os.unlink(_tmp_book)
+        st.download_button("All inputs (Excel workbook)", _book.getvalue(),
+                           "containment_project_inputs.xlsx",
+                           "application/vnd.openxmlformats-officedocument."
+                           "spreadsheetml.sheet", help=H["workbook"])
+    except ImportError:
+        st.caption("Install openpyxl for the Excel workbook export.")
+
     import yaml as _yaml
 
     st.download_button("Project file (YAML)",

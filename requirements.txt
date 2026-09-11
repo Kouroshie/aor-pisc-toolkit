@@ -16,6 +16,7 @@ CoolProp>=6.5          # Span-Wagner CO2; the cubic fallback is unreliable near 
 pyproj>=3.5            # exact EPSG coordinate transforms for GIS export
 folium>=0.15           # the GIS map on real satellite imagery
 pyshp>=2.3             # ESRI shapefile export, the format agencies ask for
+openpyxl>=3.1          # the Excel project workbook, in and out
 streamlit>=1.30
 plotly>=5.18
 pandas>=2.0

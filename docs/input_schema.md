@@ -420,6 +420,33 @@ influential cases through the VE engine to confirm.
 
 ---
 
+## The Excel workbook
+
+Everything below can be held in one workbook instead of a YAML file, which is
+usually the faster way to get a team started:
+
+```python
+from containment.config import Project
+from containment.io import workbook
+
+workbook.to_excel(Project.from_yaml("project.yaml"), "project.xlsx")
+project = Project.from_excel("project.xlsx")     # or Project.load(...)
+```
+
+```bash
+containment run project.xlsx        # the CLI takes either format
+```
+
+One sheet per part of the project: Project, Units, Injection zones (one row per
+zone, each with its own confining interval), USDW, Relative permeability,
+Threshold, Model, Plume, Wells, Faults, Penetrations and Uncertainty. The
+penetration list travels inside the workbook rather than as a separate CSV, and
+is written back out beside it when the workbook is read.
+
+Numbers keep the units declared on the Units sheet. Nothing is converted on the
+way in or out, so changing a unit there changes how every number on the other
+sheets is read.
+
 ## Validation on load
 
 `Project.from_dict` checks and reports, without stopping:

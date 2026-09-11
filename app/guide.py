@@ -137,6 +137,15 @@ FIELD = {
                      "schedule that cannot be injected is not a plan, and the "
                      "AoR that follows from one is not this project's. Give a "
                      "well `max_bhp` to have it checked.",
+    "static_map": "The same map as a PNG, on whichever basemap you pick. "
+                  "Use it when the destination is a document: a permit "
+                  "application, a board paper, a slide. The interactive HTML "
+                  "map above is better wherever a browser is available.",
+    "workbook": "Every input this run used, as one Excel workbook: project, "
+                "units, zones, USDW, relative permeability, threshold, model, "
+                "wells, faults, penetrations and uncertainty settings. It "
+                "loads straight back in, so a colleague can fill it in without "
+                "touching YAML.",
     "shapefile": "The same polygons as the GeoJSON, in the format state "
                  "agencies ask for. The zip holds .shp, .shx, .dbf and a .prj, "
                  "with the AoR, plume and pressure front as three records you "

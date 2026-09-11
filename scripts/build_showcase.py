@@ -199,6 +199,15 @@ with open(os.path.join(EXP, "project.yaml"), "w", encoding="utf-8") as fh:
     _yaml.safe_dump(project.to_dict(), fh, sort_keys=False)
 note("config.Project.to_dict")
 
+from containment.io import workbook as _workbook  # noqa: E402
+
+_workbook.to_excel(project, os.path.join(EXP, "project_inputs.xlsx"),
+                   penetrations_csv=project.penetrations_csv or None)
+_workbook.to_excel(project, os.path.join(OUT, "Containment_project_inputs.xlsx"),
+                   penetrations_csv=project.penetrations_csv or None)
+note("io.workbook.to_excel")
+note("io.workbook.from_excel")
+
 exporters.table_to_csv(
     [dict(r) for r in (res.corrective.table() if res.corrective else [])],
     os.path.join(EXP, "corrective_action.csv"))

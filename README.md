@@ -32,7 +32,8 @@ containment run examples/epa_hypothetical_site.yaml -o out/
 | **PISC** | Plume area, expansion rate, effective-radius migration rate, directional migration, pressure decline, plume-stabilisation year, a defensible PISC duration, and the 40 CFR 146.93(c) checklist |
 | **Uncertainty** | Tornado sensitivity and a Latin-hypercube Monte Carlo producing a **probabilistic AoR** (P10 / P50 / P90 boundaries) |
 | **GIS map** | A self-contained HTML map on switchable satellite / street / topographic / relief basemaps, with the AoR, both components and every artificial penetration colour-coded by required action, a measuring tool, and popups carrying each well's determination and its modelled arrival year. No API key, no account, opens offline |
-| **Exports** | GeoJSON, KML, **ESRI shapefile (.zip)**, CSV, gridded-field archive, and the project YAML that reproduces the run |
+| **Exports** | GeoJSON, KML, **ESRI shapefile (.zip)**, CSV, gridded-field archive, an **Excel workbook of every input**, and the project YAML that reproduces the run |
+| **Static maps** | The AoR on satellite, street, topographic or shaded-relief basemaps as a PNG, for documents that cannot hold a web page |
 | **Well pressure check** | Highest bottomhole pressure per well against its declared limit, with a verdict, so an uninjectable schedule is caught before its AoR is believed |
 | **Reporting** | One self-contained HTML report, organised the way an AoR & Corrective Action Plan and a PISC & Site Closure Plan are organised, with the regulatory citation on every section |
 

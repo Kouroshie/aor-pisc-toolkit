@@ -323,6 +323,28 @@ class Project:
         with open(path, encoding="utf-8") as fh:
             return cls.from_dict(yaml.safe_load(fh) or {})
 
+    @classmethod
+    def from_excel(cls, path: str) -> Project:
+        """Read a project from the workbook :mod:`containment.io.workbook` writes."""
+        from .io.workbook import from_excel
+
+        return cls.from_dict(from_excel(path))
+
+    @classmethod
+    def load(cls, path: str) -> Project:
+        """Read a project from whichever format the file is in.
+
+        YAML is the record a reviewer wants; the workbook is the one a team
+        will actually fill in. Both describe the same project, so the loader
+        takes either rather than making the caller care.
+        """
+        import os
+
+        ext = os.path.splitext(path)[1].lower()
+        if ext in (".xlsx", ".xlsm"):
+            return cls.from_excel(path)
+        return cls.from_yaml(path)
+
     # ------------------------------------------------------------------ #
     def _parse_faults(self, spec: list) -> None:
         """Read sealing or partly-sealing fault traces from the project file.

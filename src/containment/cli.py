@@ -31,7 +31,7 @@ def cmd_run(args) -> int:
     from .config import Project
     from .io import exporters
 
-    proj = Project.from_yaml(args.project)
+    proj = Project.load(args.project)
     if proj.warnings:
         _banner("Project warnings")
         for w in proj.warnings:
@@ -126,7 +126,7 @@ def cmd_threshold(args) -> int:
     from . import threshold
     from .config import Project
 
-    proj = Project.from_yaml(args.project)
+    proj = Project.load(args.project)
     res = threshold.compare_methods(
         p_usdw=proj.usdw.initial_pressure,
         p_inj=proj.injection_zone.initial_pressure,
@@ -156,8 +156,8 @@ def cmd_reevaluate(args) -> int:
     from . import delineate, workflow
     from .config import Project
 
-    a = workflow.run(Project.from_yaml(args.before), progress=lambda m: None)
-    b = workflow.run(Project.from_yaml(args.after), progress=lambda m: None)
+    a = workflow.run(Project.load(args.before), progress=lambda m: None)
+    b = workflow.run(Project.load(args.after), progress=lambda m: None)
     diff = delineate.compare_aors(a.aor, b.aor, "previous", "reevaluated")
     _banner("AoR reevaluation [40 CFR 146.84(e)]")
     for k, v in diff.items():
