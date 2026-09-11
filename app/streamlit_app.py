@@ -238,9 +238,12 @@ with col_a:
                                "probabilistic AoR")
     n_real = st.number_input("realisations", 40, 1000, 150, 10,
                              disabled=not run_unc)
-    go = st.button("Run", type="primary", **_FULL_WIDTH)
 with col_b:
     st.json(project.summary(), expanded=False)
+
+# Run is the page's primary action, so it spans the content width rather than
+# sitting in the quarter-width column that holds the uncertainty controls.
+go = st.button("Run", type="primary", **_FULL_WIDTH)
 
 if go:
     if run_unc:
