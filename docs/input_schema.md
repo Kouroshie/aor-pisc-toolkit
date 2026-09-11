@@ -25,7 +25,7 @@ print(project.warnings)      # read these before you trust anything
 | `permit` | string | optional |
 | `datum` | string | **state it.** "ground surface, depths positive downward", "MSL", "KB". Threshold pressure is sensitive to the datum and the number is meaningless without it |
 | `notes` | string | free text, carried into the report |
-| `crs` | mapping | `{epsg: 32614}` for an exact transform (needs `pyproj`), or `{origin_lon: -97.5, origin_lat: 27.5}` for a local tangent-plane approximation. Usually unnecessary: give the wells `latitude`/`longitude` and the frame is built for you. Add `x_offset`/`y_offset` to **pin** the frame, which is required when one site is modelled as several projects (one per storage formation) whose polygons are combined later |
+| `crs` | mapping | `{epsg: 32614}` for an exact transform (needs `pyproj`), or `{origin_lon: -97.5, origin_lat: 27.5}` for a local tangent-plane approximation. Usually unnecessary: give the wells `latitude`/`longitude` and the frame is built for you. Add `x_offset`/`y_offset` to **pin** the frame, which is required when one site is modelled as several projects (one per storage formation) whose polygons are combined later. **Foot-based CRSs are handled**: a Texas State Plane or BLM zone quoted in US survey feet (EPSG:32040, 32064, 2278 and friends) has its axis unit read from the CRS and converted, and `x_offset`/`y_offset` stay in that CRS's own units so a pinned frame reads like an easting off a plat |
 
 ---
 
@@ -293,6 +293,37 @@ CSV columns, all optional except `name`, `x`, `y`:
 | `records_complete` | true/false. **Blank means unknown, which routes to field testing** |
 | `mit_passed` | true/false |
 | `notes` | free text |
+
+---
+
+## `faults`
+
+```yaml
+faults:
+  - name: Fault A
+    multiplier: 0.0          # 0 = sealing, 1 = open, anything between = partly sealing
+    latlon:                  # decimal degrees, when the project is georeferenced
+      - [29.982, -94.196]
+      - [30.041, -94.086]
+  - name: growth fault B
+    multiplier: 0.05
+    points:                  # or in units.length from the project origin
+      - [-33000, -39000]
+      - [ 33000,  21000]
+```
+
+Every grid face the trace crosses gets `multiplier` as a transmissibility
+multiplier. A fault that holds is often the thing that **sets** the AoR
+boundary on one side rather than merely perturbing it -- several Gulf Coast
+applications say exactly that -- so a model with no way to express one will
+over-predict in that direction and there will be nothing in the output to
+suggest why. Give the trace enough length to cross the whole domain; a trace
+that stops inside it lets the plume and the pressure front walk around the end,
+which is a real behaviour but rarely the one intended.
+
+Faults apply to the VE engine only. The analytical engine is homogeneous by
+construction and ignores them; when both are run, the cross-check will
+disagree, and that disagreement is the point.
 
 ---
 

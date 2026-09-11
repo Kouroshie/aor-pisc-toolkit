@@ -160,6 +160,8 @@ class Project:
     penetrations_csv: str = ""
     penetrations_unit: str = "m"
 
+    faults: list[dict] = field(default_factory=list)
+
     crs: dict = field(default_factory=dict)
     uncertainty: dict = field(default_factory=dict)
     raw: dict = field(default_factory=dict)
@@ -230,6 +232,7 @@ class Project:
         for w in d.get("wells", []) or []:
             p.wells.append(_well_from_dict(w, un))
         p._resolve_geography()
+        p._parse_faults(d.get("faults") or [])
 
         th = d.get("threshold", {}) or {}
         p.threshold_method = str(th.get("method", "auto")).lower()
@@ -283,6 +286,56 @@ class Project:
             return cls.from_dict(yaml.safe_load(fh) or {})
 
     # ------------------------------------------------------------------ #
+    def _parse_faults(self, spec: list) -> None:
+        """Read sealing or partly-sealing fault traces from the project file.
+
+        A fault that holds is often the thing that *sets* the AoR boundary on
+        one side -- several Gulf Coast applications say so explicitly -- so a
+        model that cannot represent one will over-predict in that direction.
+        Traces are given either as ``points`` in the project length unit, or as
+        ``latlon`` pairs, which are converted through the project frame.
+        """
+        from .io.exporters import LocalCRS
+
+        self.faults = []
+        crs = None
+        if self.crs.get("epsg") or self.crs.get("origin_lon") is not None:
+            try:
+                crs = LocalCRS(epsg=self.crs.get("epsg"),
+                               origin_lon=self.crs.get("origin_lon"),
+                               origin_lat=self.crs.get("origin_lat"),
+                               x_offset=float(self.crs.get("x_offset", 0.0)),
+                               y_offset=float(self.crs.get("y_offset", 0.0)))
+            except Exception:
+                crs = None
+
+        for k, f in enumerate(spec):
+            name = str(f.get("name") or f"fault {k + 1}")
+            mult = float(f.get("multiplier", 0.0))
+            pts = []
+            if f.get("latlon"):
+                if crs is None:
+                    self.warnings.append(
+                        f"fault {name!r} is given in latitude/longitude but the "
+                        "project has no georeferencing; the fault was ignored")
+                    continue
+                lon = np.array([float(q[1]) for q in f["latlon"]])
+                lat = np.array([float(q[0]) for q in f["latlon"]])
+                fx, fy = crs.from_lonlat(lon, lat)
+                pts = [(float(a), float(b)) for a, b in zip(fx, fy, strict=True)]
+            else:
+                for q in f.get("points") or []:
+                    pts.append((U.length(float(q[0]), self.units.length),
+                                U.length(float(q[1]), self.units.length)))
+            if len(pts) < 2:
+                self.warnings.append(f"fault {name!r} needs at least two points")
+                continue
+            if not 0.0 <= mult <= 1.0:
+                self.warnings.append(
+                    f"fault {name!r} has multiplier {mult}; expected 0 (sealing) to 1 (open)")
+            self.faults.append({"name": name, "multiplier": mult, "points": pts})
+
+    # ------------------------------------------------------------------ #
     def _resolve_geography(self) -> None:
         """Reconcile latitude/longitude well positions with the local frame.
 
@@ -326,8 +379,11 @@ class Project:
             crs.x_offset = float(self.crs["x_offset"])
             crs.y_offset = float(self.crs.get("y_offset", 0.0))
         else:
+            # the offsets live in the CRS's own units, not in model metres,
+            # so that a pinned frame reads like an easting off a plat
             ox, oy = crs.from_lonlat(np.array([lon0]), np.array([lat0]))
-            crs.x_offset, crs.y_offset = float(ox[0]), float(oy[0])
+            crs.x_offset = float(ox[0]) / crs.unit_to_m
+            crs.y_offset = float(oy[0]) / crs.unit_to_m
         self.crs = dict(self.crs, x_offset=crs.x_offset, y_offset=crs.y_offset)
 
         for w in self.wells:

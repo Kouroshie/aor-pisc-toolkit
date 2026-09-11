@@ -194,3 +194,76 @@ def test_penetration_csv_reads_latlon(tmp_path):
     # A sits on INJ-1, so it must land on the west well in the model frame
     assert abs(wells[0].x - p.wells[0].x) < 1.0
     assert abs(wells[0].y - p.wells[0].y) < 1.0
+
+
+@pytest.mark.skipif(not HAVE_PYPROJ, reason="pyproj not installed")
+def test_foot_based_crs_is_converted_to_metres():
+    """A State Plane or BLM zone quoted in US survey feet must not scale the model.
+
+    Operators commonly pin the model to a foot-based CRS (a storage project may use
+    EPSG:32064, NAD27 / BLM 14N ftUS). Treating its eastings as metres would
+    inflate every distance by 3.28 and every area by 10.8, and nothing else in
+    the toolkit would notice.
+    """
+    from aorpisc.io.exporters import _axis_metres
+
+    assert _axis_metres(32064) == pytest.approx(0.3048006, abs=1e-6)
+    assert _axis_metres(2278) == pytest.approx(0.3048006, abs=1e-6)   # TX SP S Central
+    assert _axis_metres(32614) == pytest.approx(1.0)                  # UTM, metres
+
+    ft = LocalCRS(epsg=32064, x_offset=1361000.0, y_offset=11605000.0)
+    m = LocalCRS(epsg=32614)
+    lon = np.array([-99.9018, -99.903718])
+    lat = np.array([31.9686, 31.949648])
+    fx, fy = ft.from_lonlat(lon, lat)
+    mx, my = m.from_lonlat(lon, lat)
+    sep_ft_crs = float(np.hypot(fx[0] - fx[1], fy[0] - fy[1]))
+    sep_utm = float(np.hypot(mx[0] - mx[1], my[0] - my[1]))
+    assert sep_ft_crs == pytest.approx(sep_utm, rel=2e-3)   # both in metres now
+    assert 2050 < sep_ft_crs < 2150
+
+    blon, blat = ft.to_lonlat(fx, fy)
+    assert np.allclose(blon, lon, atol=1e-7)
+    assert np.allclose(blat, lat, atol=1e-7)
+
+
+@pytest.mark.skipif(not HAVE_PYPROJ, reason="pyproj not installed")
+def test_project_on_a_foot_based_crs_places_wells_in_metres():
+    p = Project.from_dict({
+        "project": {"crs": {"epsg": 32064}},
+        "units": {"depth": "ft", "length": "ft", "pressure": "psi",
+                  "temperature": "F", "rate": "MMT/yr"},
+        "formation": FORMATION,
+        "wells": [
+            {"name": "A", "latitude": 31.9686, "longitude": -99.9018,
+             "rate": 1.0, "start_year": 0, "stop_year": 10},
+            {"name": "B", "latitude": 31.949648, "longitude": -99.903718,
+             "rate": 1.0, "start_year": 0, "stop_year": 10},
+        ],
+    })
+    sep = math.hypot(p.wells[0].x - p.wells[1].x, p.wells[0].y - p.wells[1].y)
+    assert 2050 < sep < 2150, sep      # metres, not 6,900 feet
+
+
+def test_faults_are_read_from_the_project_file():
+    """A sealing fault often *sets* the AoR boundary, so it has to be expressible."""
+    p = _project(faults=[
+        {"name": "Fault A", "multiplier": 0.0,
+         "latlon": [[31.95, -99.90], [31.99, -99.86]]},
+        {"name": "partial", "multiplier": 0.05, "points": [[-3000, 0], [3000, 500]]},
+    ])
+    assert [f["name"] for f in p.faults] == ["Fault A", "partial"]
+    assert p.faults[0]["multiplier"] == 0.0
+    assert len(p.faults[0]["points"]) == 2
+    # the lat/lon trace landed in the model frame, near the well field
+    xs = [q[0] for q in p.faults[0]["points"]]
+    assert all(abs(x) < 60000 for x in xs), xs
+    # the local trace was converted from feet to metres
+    assert p.faults[1]["points"][0][0] == pytest.approx(U.length(-3000, "ft"))
+    assert p.warnings == []
+
+
+def test_a_fault_with_one_point_is_reported_not_silently_dropped():
+    p = _project(faults=[{"name": "stub", "points": [[0, 0]]}])
+    assert p.faults == []
+    assert any("at least two points" in w for w in p.warnings)

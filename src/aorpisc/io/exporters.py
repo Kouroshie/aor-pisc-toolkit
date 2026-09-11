@@ -37,6 +37,27 @@ except Exception:  # pragma: no cover
     HAVE_PYPROJ = False
 
 
+def _axis_metres(epsg: int) -> float:
+    """How many metres one unit of this CRS's horizontal axis is.
+
+    Returns 1.0 for a metric CRS and about 0.3048 for a foot-based one. Falls
+    back to metres, with no exception, if the CRS cannot be interrogated.
+    """
+    try:
+        from pyproj import CRS
+
+        ax = CRS.from_epsg(int(epsg)).axis_info
+        conv = [a.unit_conversion_factor for a in ax
+                if getattr(a, "unit_name", "").lower() not in ("degree", "metre")
+                or getattr(a, "abbrev", "") in ("E", "N", "X", "Y")]
+        for a in ax:
+            if a.abbrev in ("E", "N", "X", "Y") or "asting" in a.name or "orthing" in a.name:
+                return float(a.unit_conversion_factor)
+        return float(conv[0]) if conv else 1.0
+    except Exception:  # pragma: no cover
+        return 1.0
+
+
 # ==========================================================================
 @dataclass
 class LocalCRS:
@@ -44,6 +65,13 @@ class LocalCRS:
 
     Supply either ``epsg`` (with pyproj installed) for an exact transform, or
     ``origin_lon``/``origin_lat`` for the tangent-plane approximation.
+
+    Model coordinates are always metres; ``x_offset``/``y_offset`` are in the
+    projected CRS's own units, because that is how a user reads an easting off
+    a plat. Those units are not always metres -- the Texas State Plane and BLM
+    zones an operator is most likely to quote are in US survey feet -- so the
+    axis unit is read from the CRS and applied here. Getting this wrong scales
+    the whole model by 3.28, which no other check would catch.
     """
 
     epsg: int | None = None
@@ -51,6 +79,7 @@ class LocalCRS:
     origin_lat: float | None = None
     x_offset: float = 0.0
     y_offset: float = 0.0
+    unit_to_m: float = 1.0
 
     def __post_init__(self):
         self._tf = None
@@ -64,14 +93,15 @@ class LocalCRS:
                                             always_xy=True)
             self._inv = Transformer.from_crs("EPSG:4326", f"EPSG:{self.epsg}",
                                              always_xy=True)
+            self.unit_to_m = _axis_metres(self.epsg)
 
     @property
     def exact(self) -> bool:
         return self._tf is not None
 
     def to_lonlat(self, x, y):
-        x = np.asarray(x, float) + self.x_offset
-        y = np.asarray(y, float) + self.y_offset
+        x = np.asarray(x, float) / self.unit_to_m + self.x_offset
+        y = np.asarray(y, float) / self.unit_to_m + self.y_offset
         if self._tf is not None:
             lon, lat = self._tf.transform(x, y)
             return np.asarray(lon), np.asarray(lat)
@@ -95,7 +125,8 @@ class LocalCRS:
         lat = np.asarray(lat, float)
         if self._inv is not None:
             x, y = self._inv.transform(lon, lat)
-            return np.asarray(x) - self.x_offset, np.asarray(y) - self.y_offset
+            return ((np.asarray(x) - self.x_offset) * self.unit_to_m,
+                    (np.asarray(y) - self.y_offset) * self.unit_to_m)
         if self.origin_lon is None or self.origin_lat is None:
             return lon, lat
         lat0 = math.radians(self.origin_lat)
@@ -107,7 +138,9 @@ class LocalCRS:
 
     def describe(self) -> dict:
         if self._tf is not None:
-            return {"kind": "pyproj", "source_epsg": self.epsg, "target": "EPSG:4326"}
+            return {"kind": "pyproj", "source_epsg": self.epsg,
+                    "target": "EPSG:4326",
+                    "crs_unit_in_metres": round(self.unit_to_m, 9)}
         if self.origin_lon is None:
             return {"kind": "none", "note": "coordinates written in model metres"}
         return {"kind": "local tangent plane (approximate)",

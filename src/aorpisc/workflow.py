@@ -329,6 +329,11 @@ def run(p: Project, *, penetrations: list | None = None,
             anisotropy_y_over_x=1.0)
         if iz.dip_degrees:
             props.add_dip(iz.dip_degrees, iz.dip_azimuth)
+        for f in p.faults:
+            props.add_sealing_fault(f["points"], multiplier=f["multiplier"])
+            warnings.append(
+                f"fault {f['name']!r} applied with transmissibility multiplier "
+                f"{f['multiplier']:g} along {len(f['points'])} trace points")
         solver = VESolver(
             props, rho_co2=fs.rho_co2, mu_co2=fs.mu_co2, rho_brine=fs.rho_brine,
             mu_brine=fs.mu_brine, total_compressibility=p.total_compressibility(),
