@@ -131,10 +131,22 @@ FIELD = {
                        "allocation from a spinner or distributed-temperature "
                        "survey, name the zone on each well row instead and "
                        "enter the measured rates.",
+    # ---- well pressure and exports
+    "well_pressure": "The highest bottomhole pressure the model demanded of "
+                     "each well, against the limit that well declares. A rate "
+                     "schedule that cannot be injected is not a plan, and the "
+                     "AoR that follows from one is not this project's. Give a "
+                     "well `max_bhp` to have it checked.",
+    "shapefile": "The same polygons as the GeoJSON, in the format state "
+                 "agencies ask for. The zip holds .shp, .shx, .dbf and a .prj, "
+                 "with the AoR, plume and pressure front as three records you "
+                 "can symbolise apart.",
     # ---- wells and other panels
     "wells": "Rates are million tonnes of CO2 per year. start_year and "
              "stop_year are measured from the start of the simulation, so a "
-             "well can come on late or stop early.",
+             "well can come on late or stop early. A project file may give "
+             "start_date and stop_date as calendar dates instead, and results "
+             "then carry real dates alongside the model years.",
     "basemap": "Satellite imagery is the one to send to a landman. "
                "Topographic and shaded relief help when the argument is about "
                "surface access or drainage.",

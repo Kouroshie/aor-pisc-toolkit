@@ -128,6 +128,10 @@ class Project:
     permit: str = ""
     datum: str = "ground level"
     notes: str = ""
+    # Calendar date injection starts, ISO "YYYY-MM-DD". Model time is always
+    # seconds from this instant; the date is carried so results can be read
+    # back in the years a permit is actually written in.
+    start_date: str = ""
 
     injection_zone: Zone = field(default_factory=Zone)
     confining_zone: Zone = field(default_factory=Zone)
@@ -190,6 +194,7 @@ class Project:
         p.datum = pr.get("datum", p.datum)
         p.notes = pr.get("notes", "")
         p.crs = pr.get("crs", {}) or {}
+        p.start_date = str(pr.get("start_date") or "")[:10]
 
         def zone(key: str, name: str) -> Zone:
             z = d.get("formation", {}).get(key, {}) or {}
@@ -257,8 +262,11 @@ class Project:
                 krw0=float(rp.get("krw0", 1.0)), krg0=float(rp.get("krg0", 0.30)),
                 m=float(rp.get("m", 3.0)), n=float(rp.get("n", 3.0)))
 
+        origin = _project_origin(d)
+        if origin and not p.start_date:
+            p.start_date = origin
         for w in d.get("wells", []) or []:
-            p.wells.append(_well_from_dict(w, un))
+            p.wells.append(_well_from_dict(w, un, origin))
         p._resolve_geography()
         p._parse_faults(d.get("faults") or [])
 
@@ -611,6 +619,20 @@ class Project:
         return max((w.stop_time() for w in self.wells if w.kind == "injector"),
                    default=0.0)
 
+    def calendar(self, t: float):
+        """The calendar date at model time ``t`` seconds, or None."""
+        import datetime as _dt
+
+        origin = _parse_date(self.start_date)
+        if origin is None:
+            return None
+        return origin + _dt.timedelta(days=U.time_out(float(t), "yr") * 365.25)
+
+    def calendar_year(self, t: float):
+        """The calendar year at model time ``t``, or None if undated."""
+        d = self.calendar(t)
+        return d.year if d is not None else None
+
     def total_injected_mass(self) -> float:
         return sum(w.total_mass() for w in self.wells if w.kind == "injector")
 
@@ -677,7 +699,46 @@ def _zone_from_dict(z: dict, un: Units, name: str) -> Zone:
     return out
 
 
-def _well_from_dict(w: dict, un: Units) -> WellSpec:
+def _parse_date(value):
+    """An ISO date (or datetime, or date) as a `datetime.date`, else None."""
+    import datetime as _dt
+
+    if value is None or value == "":
+        return None
+    if isinstance(value, _dt.datetime):
+        return value.date()
+    if isinstance(value, _dt.date):
+        return value
+    try:
+        return _dt.date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def _years_since(value, origin) -> float | None:
+    """Decimal years from `origin` to `value`, or None if either is missing."""
+    d, o = _parse_date(value), _parse_date(origin)
+    if d is None or o is None:
+        return None
+    return (d - o).days / 365.25
+
+
+def _project_origin(d: dict) -> str:
+    """The date model time is measured from.
+
+    The project may name one. If it does not but the wells carry dates, the
+    earliest of those is the start of injection, which is the datum a permit
+    counts from anyway.
+    """
+    named = _parse_date((d.get("project") or {}).get("start_date"))
+    if named:
+        return named.isoformat()
+    dates = [_parse_date(w.get("start_date")) for w in (d.get("wells") or [])]
+    dates = [x for x in dates if x is not None]
+    return min(dates).isoformat() if dates else ""
+
+
+def _well_from_dict(w: dict, un: Units, origin: str = "") -> WellSpec:
     kind = str(w.get("kind", "injector")).lower()
     x = U.length(float(w.get("x", 0.0)), w.get("coordinate_unit", un.length))
     y = U.length(float(w.get("y", 0.0)), w.get("coordinate_unit", un.length))
@@ -691,6 +752,18 @@ def _well_from_dict(w: dict, un: Units) -> WellSpec:
             else:
                 q = U.volume_rate(float(step["rate"]), step.get("unit", un.brine_rate))
             sched.append((t, q))
+    elif w.get("start_date") is not None:
+        # Calendar dates are how an operator writes a schedule. They are
+        # converted against the project start, which `_resolve_dates` fills in
+        # from the earliest well date when the project does not name one.
+        start = _years_since(w["start_date"], origin) or 0.0
+        stop = _years_since(w.get("stop_date"), origin)
+        rate = float(w.get("rate", 0.0))
+        q = (U.mass_rate(rate, w.get("rate_unit", un.rate)) if kind == "injector"
+             else U.volume_rate(rate, w.get("rate_unit", un.brine_rate)))
+        sched = [(U.time(start, "yr"), q)]
+        if stop is not None:
+            sched.append((U.time(stop, "yr"), 0.0))
     else:
         start = U.time(float(w.get("start_year", 0.0)), un.time)
         stop = U.time(float(w.get("stop_year", 0.0)), un.time)

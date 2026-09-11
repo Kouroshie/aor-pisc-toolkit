@@ -279,14 +279,34 @@ def monte_carlo(evaluate: Callable[[dict], dict], parameters: Sequence[Parameter
 # ==========================================================================
 def default_parameters(permeability_md: float, porosity: float,
                        thickness_ft: float, compressibility_1_psi: float,
-                       spread: float = 0.5) -> list[Parameter]:
-    """A conventional starting set of uncertain reservoir parameters.
+                       spread: float = 0.5, *,
+                       initial_pressure_psi: float | None = None,
+                       temperature_f: float | None = None,
+                       salinity_ppm: float | None = None,
+                       swr: float | None = None, sgr: float | None = None,
+                       krg0: float | None = None, corey: float | None = None,
+                       threshold_psi: float | None = None) -> list[Parameter]:
+    """A conventional set of uncertain inputs for an AoR sensitivity study.
 
     ``spread`` is the fractional half-range for the additive parameters and
     the multiplicative factor for permeability (0.5 -> permeability varies by
     a factor of 2 either way, which is a realistic pre-drill range).
+
+    The first four are the storage properties every sensitivity study varies.
+    The keyword arguments add the ones an AoR study needs and a capacity study
+    does not:
+
+    * **pressure, temperature and salinity** set CO2 density through the
+      equation of state, so they move the plume without touching the rock;
+    * **residual CO2 saturation** decides whether the plume ever stops, which
+      is what a PISC timeframe rests on;
+    * **threshold pressure** is the largest discretionary lever in the whole
+      delineation, and leaving it out of the tornado hides that fact.
+
+    Each is included only when a value is given, so a caller that wants the
+    original four-parameter study still gets exactly that.
     """
-    return [
+    out = [
         Parameter("permeability_md", permeability_md,
                   permeability_md * (1 - spread), permeability_md / (1 - spread),
                   "lognormal", "mD"),
@@ -300,6 +320,38 @@ def default_parameters(permeability_md: float, porosity: float,
                   compressibility_1_psi * 0.5, compressibility_1_psi * 2.0,
                   "lognormal", "1/psi"),
     ]
+    if initial_pressure_psi is not None and np.isfinite(initial_pressure_psi):
+        # pressure is measured, not guessed, so it gets a tighter band than
+        # the rock properties: a 10 % error on a DST or a gauge is generous
+        out.append(Parameter(
+            "initial_pressure_psi", initial_pressure_psi,
+            initial_pressure_psi * (1 - 0.2 * spread),
+            initial_pressure_psi * (1 + 0.2 * spread), "triangular", "psi"))
+    if temperature_f is not None and np.isfinite(temperature_f):
+        out.append(Parameter(
+            "temperature_f", temperature_f, temperature_f - 20.0 * spread,
+            temperature_f + 20.0 * spread, "triangular", "degF"))
+    if salinity_ppm is not None and np.isfinite(salinity_ppm):
+        out.append(Parameter(
+            "salinity_ppm", salinity_ppm, salinity_ppm * (1 - 0.5 * spread),
+            salinity_ppm * (1 + 0.5 * spread), "triangular", "ppm"))
+    if swr is not None and np.isfinite(swr):
+        out.append(Parameter("swr", swr, max(swr - 0.3 * spread, 0.02),
+                             min(swr + 0.3 * spread, 0.8), "triangular", "-"))
+    if sgr is not None and np.isfinite(sgr):
+        out.append(Parameter("sgr", sgr, max(sgr - 0.3 * spread, 0.0),
+                             min(sgr + 0.3 * spread, 0.5), "triangular", "-"))
+    if krg0 is not None and np.isfinite(krg0):
+        out.append(Parameter("krg0", krg0, max(krg0 * (1 - spread), 0.05),
+                             min(krg0 * (1 + spread), 1.0), "triangular", "-"))
+    if corey is not None and np.isfinite(corey):
+        out.append(Parameter("corey", corey, max(corey - spread, 1.5),
+                             min(corey + spread, 6.0), "triangular", "-"))
+    if threshold_psi is not None and np.isfinite(threshold_psi):
+        out.append(Parameter(
+            "threshold_psi", threshold_psi, threshold_psi * (1 - 0.4 * spread),
+            threshold_psi * (1 + 0.4 * spread), "triangular", "psi"))
+    return out
 
 
 __all__ = [

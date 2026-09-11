@@ -212,8 +212,11 @@ def write_polygons(result, path: str, crs: LocalCRS | None = None,
             fh.write(to_kml(result, crs))
     elif ext == ".csv":
         to_csv(result, path, crs)
+    elif ext in (".zip", ".shp"):
+        to_shapefile(result, path, crs, properties)
     else:
-        raise ValueError(f"unsupported extension {ext!r}; use .geojson, .kml or .csv")
+        raise ValueError(f"unsupported extension {ext!r}; use .geojson, .kml, "
+                         ".csv, .shp or .zip")
     return path
 
 
@@ -283,6 +286,113 @@ def save_npz(path: str, x, y, times, dp=None, plume=None, **extra) -> str:
     return path
 
 
+# ==========================================================================
+# ESRI shapefile
+# ==========================================================================
+_WGS84_PRJ = (
+    'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",'
+    '6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],'
+    'UNIT["Degree",0.0174532925199433]]'
+)
+
+
+def _prj_text(crs: LocalCRS | None) -> str | None:
+    """Well-known text for the frame the exported coordinates are in.
+
+    Geometries leave :func:`_reproject` in longitude and latitude whenever a
+    CRS is supplied, so the projection file describes WGS 84 rather than the
+    projected system the model ran in. Without a CRS the coordinates are model
+    metres on an arbitrary origin, which no WKT can describe honestly, so none
+    is written.
+    """
+    return _WGS84_PRJ if crs is not None else None
+
+
+def to_shapefile(result, path: str, crs: LocalCRS | None = None,
+                 properties: dict | None = None) -> str:
+    """Write the AoR, plume and pressure front as one zipped ESRI shapefile.
+
+    GeoJSON and KML are better formats by every technical measure, and this is
+    still the one a state agency asks for. The three components go in as
+    separate polygon records with the same attributes GeoJSON carries, so a
+    reviewer can symbolise them apart in ArcGIS or QGIS.
+
+    ``path`` ending in ``.zip`` produces the archive every GIS accepts as a
+    single file; any other extension writes the loose .shp/.shx/.dbf/.prj set.
+    """
+    import shapefile  # pyshp
+
+    base = dict(properties or {})
+    parts = [(name, geom) for name, geom in
+             (("aor", result.aor), ("plume", result.plume),
+              ("pressure_front", result.pressure_front))
+             if geom is not None and not geom.is_empty]
+
+    stem = path[:-4] if path.lower().endswith(".zip") else os.path.splitext(path)[0]
+    writer = shapefile.Writer(stem, shapeType=shapefile.POLYGON)
+    # dBase field names are capped at 10 characters, which is why these are
+    # abbreviated rather than matching the GeoJSON property names.
+    writer.field("component", "C", size=20)
+    writer.field("area_acre", "N", size=18, decimal=2)
+    writer.field("area_sqmi", "N", size=18, decimal=4)
+    writer.field("dpc_psi", "N", size=12, decimal=2)
+    writer.field("method", "C", size=80)
+    writer.field("criterion", "C", size=80)
+    for key in base:
+        writer.field(str(key)[:10], "C", size=60)
+
+    for name, geom in parts:
+        g = _reproject(geom, crs)
+        rings = []
+        for poly in _geoms(g):
+            # shapefile winding: outer rings clockwise, holes counter-clockwise,
+            # which is the opposite of the GeoJSON convention shapely follows.
+            rings.append(list(poly.exterior.coords)[::-1]
+                         if poly.exterior.is_ccw else list(poly.exterior.coords))
+            for hole in poly.interiors:
+                rings.append(list(hole.coords) if hole.is_ccw
+                             else list(hole.coords)[::-1])
+        if not rings:
+            continue
+        writer.poly(rings)
+        writer.record(name,
+                      U.area_out(geom.area, "acres"),
+                      U.area_out(geom.area, "mi2"),
+                      U.pressure_out(result.threshold_pressure, "psi"),
+                      str(result.method)[:80],
+                      str(result.plume_criterion)[:80],
+                      *[str(v)[:60] for v in base.values()])
+    writer.close()
+
+    prj = _prj_text(crs)
+    if prj:
+        with open(stem + ".prj", "w", encoding="utf-8") as fh:
+            fh.write(prj)
+
+    if path.lower().endswith(".zip"):
+        import zipfile
+
+        members = [stem + ext for ext in (".shp", ".shx", ".dbf", ".prj")
+                   if os.path.exists(stem + ext)]
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            for m in members:
+                z.write(m, os.path.basename(m))
+        for m in members:
+            os.unlink(m)
+    return path
+
+
+def shapefile_bytes(result, crs: LocalCRS | None = None,
+                    properties: dict | None = None, stem: str = "aor") -> bytes:
+    """The zipped shapefile as bytes, for a download button."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        out = to_shapefile(result, os.path.join(tmp, stem + ".zip"), crs, properties)
+        with open(out, "rb") as fh:
+            return fh.read()
+
+
 def table_to_csv(rows: list[dict], path: str) -> str:
     """Write a list of dicts as CSV, using the union of keys as the header."""
     import csv
@@ -304,4 +414,4 @@ def table_to_csv(rows: list[dict], path: str) -> str:
 
 
 __all__ = ["LocalCRS", "HAVE_PYPROJ", "to_geojson", "write_polygons", "to_kml",
-           "to_csv", "save_npz", "table_to_csv"]
+           "to_csv", "to_shapefile", "shapefile_bytes", "save_npz", "table_to_csv"]

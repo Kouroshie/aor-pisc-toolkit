@@ -434,6 +434,15 @@ else:
     st.success("Domain size, grid resolution, boundary influence, mass balance "
                "and pressure-regime applicability all passed their checks.")
 
+well_rows = getattr(res, "well_pressure", []) or []
+if well_rows:
+    over = [r for r in well_rows if r.get("verdict") == "EXCEEDS LIMIT"]
+    label = (f"Well pressure check: {len(over)} well(s) above the declared limit"
+             if over else "Well pressure check: all wells within their limits")
+    with st.expander(label, expanded=bool(over)):
+        st.caption(H["well_pressure"])
+        st.dataframe(well_rows, hide_index=True)
+
 # A result lives in session state, and a session outlives a deployment: after
 # an update the page can still be holding a result built by the previous
 # version of the code, which has none of the attributes added since. Reading
@@ -713,6 +722,13 @@ with T["Export"]:
     st.download_button("AoR GeoJSON", gj, "aor.geojson", "application/geo+json")
     st.download_button("AoR KML", exporters.to_kml(res.aor, crs),
                        "aor.kml", "application/vnd.google-earth.kml+xml")
+    try:
+        st.download_button(
+            "AoR shapefile (.zip)",
+            exporters.shapefile_bytes(res.aor, crs, {"project": project.name}),
+            "aor_shapefile.zip", "application/zip", help=H["shapefile"])
+    except ImportError:
+        st.caption("Install pyshp for the ESRI shapefile export.")
     st.download_button("Full HTML report", report.build_html(res),
                        "containment_report.html", "text/html")
     st.download_button("Result summary (JSON)",

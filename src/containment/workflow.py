@@ -112,6 +112,9 @@ class ProjectResult:
     zones: list[ZoneResult] = field(default_factory=list)
     # The AoR as it would stand at each re-evaluation date [146.84(e)].
     series: list = field(default_factory=list)
+    # One row per well: the highest bottomhole pressure the model reached and
+    # whether it stayed under the declared limit.
+    well_pressure: list = field(default_factory=list)
 
     @property
     def cell_area(self) -> float:
@@ -147,7 +150,15 @@ class ProjectResult:
             out["injection_zones"] = [z.summary() for z in zones]
             out["zone_allocation"] = self.project.zone_allocation()
         if series:
-            out["aor_by_reevaluation_year"] = delineate.series_growth(series)
+            rows = delineate.series_growth(series)
+            for row, snap in zip(rows, series, strict=False):
+                when = self.project.calendar(snap.time)
+                if when is not None:
+                    row["date"] = str(when)
+            out["aor_by_reevaluation_year"] = rows
+        wp = getattr(self, "well_pressure", None)
+        if wp:
+            out["well_pressure"] = wp
         return out
 
     @property
@@ -515,6 +526,20 @@ def run_zone(p: Project, *, penetrations: list | None = None,
             dp_fields=dp_fields, threshold_pressure=th.delta_p_critical)
         warnings.extend(ca.warnings)
 
+    if p.engine == "ve":
+        well_rows = well_pressure_check(p, ve_result=ve_result)
+    else:
+        well_rows = well_pressure_check(
+            p, model=_analytical_model(p), wells=_to_analytical_wells(p),
+            times=times)
+    for row in well_rows:
+        if row["verdict"] == "EXCEEDS LIMIT":
+            warnings.append(
+                f"well {row['well']} reaches {row['max_bhp_psi']:,.0f} psi at "
+                f"year {row['year_of_max']:,.1f}, above its declared limit of "
+                f"{row['limit_psi']:,.0f} psi. The schedule is not injectable "
+                "as written, so the AoR below is not this project's.")
+
     if label:
         aor.metadata["zone"] = label
 
@@ -523,10 +548,59 @@ def run_zone(p: Project, *, penetrations: list | None = None,
         aor=aor, x=x, y=y, times=times, dp_fields=dp_fields,
         plume_fields=plume_fields, pisc=pisc_res, corrective=ca,
         ve=ve_result, analytical_checks=checks, warnings=warnings,
+        well_pressure=well_rows,
     )
 
 
 # ==========================================================================
+def well_pressure_check(p: Project, ve_result=None, model=None,
+                        wells=None, times=None) -> list[dict]:
+    """Highest bottomhole pressure per well, against the declared limit.
+
+    A rate schedule that cannot be injected is not a plan, and the AoR that
+    follows from an unachievable rate is not this project's AoR. Where a well
+    declares `max_bhp` the run now says whether the schedule fits inside it.
+    A well with no declared limit is reported without a verdict rather than
+    quietly passed.
+    """
+    rows: list[dict] = []
+    for w in p.wells:
+        if w.kind == "monitor":
+            continue
+        peak, when = float("nan"), float("nan")
+        if ve_result is not None and getattr(ve_result, "bhp", None):
+            series = np.asarray(ve_result.bhp.get(w.name, []), float)
+            if series.size:
+                i = int(np.nanargmax(series))
+                peak = float(series[i])
+                when = float(np.asarray(ve_result.times)[i])
+        elif model is not None and wells is not None and times is not None:
+            match = [x for x in wells if x.name == w.name]
+            if match:
+                vals = [model.bottomhole_pressure(match[0], float(t), wells)
+                        for t in times]
+                i = int(np.nanargmax(vals))
+                peak, when = float(vals[i]), float(times[i])
+        if not np.isfinite(peak):
+            continue
+
+        row = {"well": w.name, "kind": w.kind,
+               "max_bhp_psi": U.pressure_out(peak, "psi"),
+               "year_of_max": U.time_out(when, "yr")}
+        date = p.calendar(when)
+        if date is not None:
+            row["date_of_max"] = str(date)
+        if np.isfinite(w.max_bhp):
+            row["limit_psi"] = U.pressure_out(w.max_bhp, "psi")
+            row["margin_psi"] = U.pressure_out(w.max_bhp - peak, "psi")
+            row["verdict"] = "pass" if peak <= w.max_bhp else "EXCEEDS LIMIT"
+        else:
+            row["limit_psi"] = float("nan")
+            row["verdict"] = "no limit declared"
+        rows.append(row)
+    return rows
+
+
 def reevaluation_times(p: Project) -> np.ndarray:
     """The dates the AoR is delineated at, in seconds.
 
@@ -696,7 +770,20 @@ def _run_stacked(p: Project, marks: np.ndarray, *, penetrations=None,
         ve=base.ve, analytical_checks=base.analytical_checks,
         warnings=list(dict.fromkeys(warnings)),
         zones=per_zone, series=series,
+        # Every zone shares the same wellbore, so the binding pressure is the
+        # highest any zone's run demanded of it.
+        well_pressure=_worst_well_pressure(zone_runs),
     )
+
+
+def _worst_well_pressure(runs) -> list:
+    worst: dict[str, dict] = {}
+    for r in runs:
+        for row in getattr(r, "well_pressure", []) or []:
+            cur = worst.get(row["well"])
+            if cur is None or row["max_bhp_psi"] > cur["max_bhp_psi"]:
+                worst[row["well"]] = row
+    return list(worst.values())
 
 
 def _pisc_years(r) -> float:
@@ -728,32 +815,73 @@ def run_uncertainty_analysis(p: Project, th: threshold.ThresholdResult,
     seed = cfg.get("seed", 0)
 
     iz = p.injection_zone
+    rp = p.relperm
+    # Relative permeability is only varied when it is the Brooks-Corey form
+    # the parameters below name; another model keeps its base values.
+    corey_like = all(hasattr(rp, a) for a in ("swr", "sgr", "krg0", "m"))
     params = unc.default_parameters(
         permeability_md=U.permeability_out(iz.permeability, "mD"),
         porosity=iz.porosity,
         thickness_ft=U.length_out(iz.thickness, "ft"),
         compressibility_1_psi=U.compressibility_out(p.total_compressibility(), "1/psi"),
-        spread=spread)
+        spread=spread,
+        initial_pressure_psi=U.pressure_out(iz.initial_pressure, "psi"),
+        temperature_f=U.temperature_out(iz.temperature, "F"),
+        salinity_ppm=(iz.salinity * 1e6 if np.isfinite(iz.salinity) else None),
+        swr=(rp.swr if corey_like else None),
+        sgr=(rp.sgr if corey_like else None),
+        krg0=(rp.krg0 if corey_like else None),
+        corey=(float(rp.m) if corey_like else None),
+        threshold_psi=U.pressure_out(th.delta_p_critical, "psi"))
 
     base_times = p.output_times
     wells = _to_analytical_wells(p)
     xs = [w.x for w in wells] or [0.0]
     ys = [w.y for w in wells] or [0.0]
 
+    def _case_fluid(case: dict):
+        """Fluid state for this realisation.
+
+        Pressure, temperature and salinity move CO2 density through the
+        equation of state, so a realisation that changed them and kept the
+        base fluid would be varying the label and not the physics.
+        """
+        pres = (U.pressure(case["initial_pressure_psi"], "psi")
+                if "initial_pressure_psi" in case else iz.initial_pressure)
+        temp = (U.temperature(case["temperature_f"], "F")
+                if "temperature_f" in case else iz.temperature)
+        sal = (case["salinity_ppm"] * 1e-6
+               if "salinity_ppm" in case else iz.salinity)
+        return fluids.evaluate(pres, temp, sal), pres
+
+    def _case_relperm(case: dict):
+        if not corey_like or "sgr" not in case:
+            return rp
+        from .analytical.relperm import BrooksCorey
+
+        return BrooksCorey(swr=case.get("swr", rp.swr), sgr=case["sgr"],
+                           krw0=getattr(rp, "krw0", 1.0),
+                           krg0=case.get("krg0", rp.krg0),
+                           m=case.get("corey", rp.m), n=case.get("corey", rp.n))
+
+    def _case_threshold(case: dict) -> float:
+        return (U.pressure(case["threshold_psi"], "psi")
+                if "threshold_psi" in case else th.delta_p_critical)
+
     def build(case: dict) -> AquiferModel:
-        fs = p.fluid_state()
+        fs, pres = _case_fluid(case)
         return AquiferModel(
             permeability=U.permeability(case["permeability_md"], "mD"),
             thickness=U.length(case["thickness_ft"], "ft"),
             porosity=case["porosity"],
             total_compressibility=U.compressibility(case["compressibility_1_psi"], "1/psi"),
             mu_brine=fs.mu_brine, mu_co2=fs.mu_co2, rho_co2=fs.rho_co2,
-            initial_pressure=iz.initial_pressure, relperm=p.relperm,
+            initial_pressure=pres, relperm=_case_relperm(case),
             boundary=Boundary(kind="infinite"))
 
     def area_of(case: dict) -> float:
         m = build(case)
-        r = delineate.delineate_analytical(m, wells, th.delta_p_critical,
+        r = delineate.delineate_analytical(m, wells, _case_threshold(case),
                                            base_times, n=121, max_expansions=4)
         return r.area_acres
 
@@ -775,7 +903,7 @@ def run_uncertainty_analysis(p: Project, th: threshold.ThresholdResult,
     def evaluate(case: dict) -> dict:
         m = build(case)
         _, dp_max = m.pressure_grid(grid_x, grid_y, base_times, wells)
-        inside = dp_max >= th.delta_p_critical
+        inside = dp_max >= _case_threshold(case)
         for w in wells:
             if w.kind != "injector":
                 continue

@@ -32,38 +32,75 @@ containment run examples/epa_hypothetical_site.yaml -o out/
 | **PISC** | Plume area, expansion rate, effective-radius migration rate, directional migration, pressure decline, plume-stabilisation year, a defensible PISC duration, and the 40 CFR 146.93(c) checklist |
 | **Uncertainty** | Tornado sensitivity and a Latin-hypercube Monte Carlo producing a **probabilistic AoR** (P10 / P50 / P90 boundaries) |
 | **GIS map** | A self-contained HTML map on switchable satellite / street / topographic / relief basemaps, with the AoR, both components and every artificial penetration colour-coded by required action, a measuring tool, and popups carrying each well's determination and its modelled arrival year. No API key, no account, opens offline |
+| **Exports** | GeoJSON, KML, **ESRI shapefile (.zip)**, CSV, gridded-field archive, and the project YAML that reproduces the run |
+| **Well pressure check** | Highest bottomhole pressure per well against its declared limit, with a verdict, so an uninjectable schedule is caught before its AoR is believed |
 | **Reporting** | One self-contained HTML report, organised the way an AoR & Corrective Action Plan and a PISC & Site Closure Plan are organised, with the regulatory citation on every section |
 
 ---
 
-## Why not just use EASiTool?
+## How this compares with EASiTool
 
-[EASiTool](https://gccc.beg.utexas.edu/research/easitool) (UT Austin BEG) is a
-good, widely used tool, and this toolkit implements the same analytical
-lineage it rests on (Mathias et al. 2011; Buckley-Leverett fronts;
-superposition of pressure buildup). But EASiTool is a **storage-capacity and
-well-optimisation** tool, not an AoR tool. The differences that matter for a
-Class VI permit:
+[EASiTool 5.1](https://gccc.beg.utexas.edu/easitool) (Gulf Coast Carbon Center,
+UT Austin) is the tool this one gets compared with, it is good at what it does,
+and this toolkit shares its analytical lineage (Mathias et al. 2011;
+Buckley-Leverett fronts; superposition of pressure buildup). The comparison
+below was made by running EASiTool 5.1 on its own input template in September
+2026, not from its documentation.
 
-| | EASiTool v4 | containment |
+The two tools answer different questions. **EASiTool sizes a project**: how
+much CO2 fits, how many wells it takes, what it is worth. **This one builds
+the permit demonstrations**: where the Area of Review is, which wells have to
+be fixed, and how long the site must be watched afterwards.
+
+| | EASiTool 5.1 | containment |
 |---|---|---|
-| Purpose | storage capacity, optimal well count and rates, NPV | AoR delineation, corrective action, PISC demonstration |
-| Threshold pressure | not computed | four EPA/TCEQ methods, compared, with regime checks |
-| AoR polygon | not produced | plume + pressure-front geometric union, exported to GIS |
-| Geometry | square reservoir centred in a square basin (arbitrary well locations in the v4 general-geometry module) | arbitrary well coordinates, arbitrary domain, per-well step-rate schedules |
-| Heterogeneity, dip, faults | not represented | full field of permeability, porosity, thickness, top-surface structure, fault transmissibility multipliers |
-| Post-injection | not modelled | vertical-equilibrium buoyant migration with residual trapping, centuries if needed |
-| Uncertainty | one-at-a-time tornado | tornado **and** Latin-hypercube Monte Carlo with a probabilistic AoR |
-| Corrective action | none | EPA decision tree + arrival-time phasing |
-| PISC | none | full 146.93 metrics and checklist |
-| GIS output | none | GeoJSON, KML and an interactive satellite-imagery map |
-| Licence / platform | free binary, Windows, MATLAB Runtime | Apache-2.0 source, any OS, pip-installable, scriptable, CI-tested |
+| Purpose | storage capacity, well-count optimisation, NPV | AoR delineation, corrective action, PISC demonstration |
+| **Threshold pressure** | **an input you type** (template default 2 MPa, adjustable by slider) | **computed** by four EPA/TCEQ methods, compared, with pressure-regime checks |
+| USDW and confining zone | not represented in the input file | required inputs; the threshold is derived from them |
+| AoR | evaluated **at a selected timestep**, from the pressure field | **maximum extent over the project lifetime** [EPA Section 3.4], plume and pressure front unioned, each reported separately |
+| Plume | a radius per well | a contoured field: merged plumes, dip-driven migration, residual trapping |
+| Geometry | one homogeneous reservoir area, net sand capped at 500 m | full fields of permeability, porosity, thickness and top structure, arbitrary domain |
+| Stacked zones | not supported (the template says to split thick intervals and run them separately) | modelled per zone, each with its own threshold, and unioned |
+| Faults | a trace, no properties | traces with transmissibility multipliers |
+| Boundaries | open, closed | infinite, constant-pressure, no-flow |
+| Post-injection | pressure relaxes; no migration physics | vertical-equilibrium buoyant migration with residual trapping, centuries if needed |
+| AoR through time | a timestep slider | delineation at every 146.84(e) re-evaluation date, with the acreage newly included at each |
+| Corrective action | none | EPA Figure 4-3 decision tree, phased by modelled arrival time |
+| PISC | none | 146.93 metrics, stabilisation year, defensible timeframe, (c) checklist |
+| Sensitivity | tornado over ~14 inputs on mean reservoir pressure; Monte Carlo on capacity | tornado over 12 inputs **on AoR area**, Latin-hypercube Monte Carlo, probabilistic AoR as a map |
+| Model-integrity checks | none reported | domain size, grid resolution, boundary influence, mass balance, threshold applicability |
+| Economics | NPV, capex/opex, 45Q credit, discount rate | none |
+| Storage capacity | yes, under fixed BHP | not computed |
+| Well optimisation | capacity and NPV against number of injectors | none |
+| Well pressure check | per-well pass/fail against a limit | per-well pass/fail against a limit |
+| GIS output | interactive map, shapefile | interactive map on switchable basemaps, GeoJSON, KML, **shapefile**, CSV |
+| Input | one Excel template, SI or field units | YAML project file, any unit system, or a CSV/simulator import |
+| Access | web app, sign-in, alpha | `pip install containment`, library + CLI + web app, Apache-2.0, 155 tests in CI |
 
-The last row is not a small point. EPA notes that proprietary codes "may
-prevent full evaluation of model results" and encourages operators to disclose
-code assumptions and governing equations. Everything here is readable, every
-equation carries its citation in the docstring, and a reviewer can re-run the
-operator's own numbers under different assumptions in seconds.
+**Where EASiTool is the better choice.** If the question is *how much can we
+store, with how many wells, and does it pay*, EASiTool answers it directly and
+this toolkit does not answer it at all. Its Excel front end is also friendlier
+to anyone who does not want to edit YAML.
+
+**Where this one is.** A Class VI Area of Review is not a pressure contour at a
+chosen date and a threshold someone typed in. It is the maximum extent over the
+project lifetime of whichever is larger, plume or pressure front, against a
+threshold derived from the USDW you are protecting. That derivation needs a
+USDW, a confining zone and a fluid column, none of which EASiTool asks for.
+Everything downstream of the AoR -- the corrective-action list, the PISC
+timeframe, the re-evaluation schedule -- follows from it.
+
+Four things were added to this toolkit after that side-by-side: shapefile
+export, per-well bottomhole-pressure verdicts, calendar dates on schedules and
+results, and a sensitivity study that varies fluid properties, relative
+permeability and the threshold pressure rather than only the four storage
+properties. Credit where due.
+
+A last point that is not a feature comparison. EPA notes that proprietary codes
+"may prevent full evaluation of model results" and encourages operators to
+disclose code assumptions and governing equations. Everything here is readable,
+every equation carries its citation in the docstring, and a reviewer can re-run
+the operator's own numbers under different assumptions in seconds.
 
 ---
 

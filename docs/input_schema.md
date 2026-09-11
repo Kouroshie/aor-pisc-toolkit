@@ -190,6 +190,27 @@ longitude is the better path: the local frame is built around the well field
 automatically, the UTM zone is chosen for you, and the GIS map becomes
 available without you computing anything.
 
+Schedules may be written in **calendar dates** instead of years:
+
+```yaml
+project:
+  start_date: 2027-04-01      # model time is measured from here
+wells:
+  - {name: INJ-1, x: 0, y: 0, rate: 0.7, max_bhp: 3200,
+     start_date: 2027-04-01, stop_date: 2042-04-01}
+```
+
+With a start date in play, results carry real dates as well as model years:
+the AoR re-evaluation table gains a `date` column and the well-pressure check
+reports the date of peak pressure. Omit `project.start_date` and the earliest
+well date is used. Omit dates entirely and `start_year`/`stop_year` behave as
+they always have, with results left undated.
+
+`max_bhp` gives a well a pressure limit. Every run then reports the highest
+bottomhole pressure the model demanded of that well, with a pass or an
+`EXCEEDS LIMIT` verdict and a warning, because an AoR computed from a rate
+that cannot be injected is not that project's AoR.
+
 Add `zone:` to send a completion's whole rate to one named injection zone of
 a stacked project. A well with no `zone` is treated as commingled and its rate
 is split between zones in proportion to flow capacity `k*h`, which is

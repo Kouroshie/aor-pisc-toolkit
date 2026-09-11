@@ -41,9 +41,9 @@ dependencies = [
 
 [project.optional-dependencies]
 app = ["streamlit>=1.30", "plotly>=5.18", "pandas>=2.0"]
-gis = ["pyproj>=3.5", "folium>=0.15"]
+gis = ["pyproj>=3.5", "folium>=0.15", "pyshp>=2.3"]
 full = ["streamlit>=1.30", "plotly>=5.18", "pandas>=2.0", "pyproj>=3.5",
-        "folium>=0.15"]
+        "folium>=0.15", "pyshp>=2.3"]
 dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.4"]
 
 [project.urls]
