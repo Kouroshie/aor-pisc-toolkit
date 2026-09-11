@@ -22,17 +22,26 @@ import tempfile
 import numpy as np
 import streamlit as st
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__))), "src"))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(_HERE), "src"))
+# `streamlit run` puts the script's own directory on the path, but a test
+# harness need not, so the sibling modules below get it explicitly.
+sys.path.insert(0, _HERE)
+
+import guide  # noqa: E402  (sibling module: help text)
+import theme  # noqa: E402  (sibling module: page styling)
 
 from aorpisc import pisc as pisc_mod  # noqa: E402
-from aorpisc import report, viz, workflow
+from aorpisc import report, viz, workflow  # noqa: E402
 from aorpisc import units as U  # noqa: E402
 from aorpisc.config import Project  # noqa: E402
 from aorpisc.io import exporters  # noqa: E402
 
 st.set_page_config(page_title="AoR / PISC toolkit", page_icon="*",
                    layout="wide", initial_sidebar_state="expanded")
+theme.apply()
+
+H = guide.FIELD
 
 
 # --------------------------------------------------------------------------
@@ -98,57 +107,73 @@ def _project_from_form() -> dict:
     permit = st.sidebar.text_input("Permit number", "")
 
     st.sidebar.header("Injection zone")
-    top = _num("top depth", 6000, "ft", key="iz_top", step=100.0)
-    thick = _num("net thickness", 250, "ft", key="iz_h", step=10.0)
+    top = _num("top depth", 6000, "ft", key="iz_top", step=100.0,
+               help=H["iz_top"])
+    thick = _num("net thickness", 250, "ft", key="iz_h", step=10.0,
+                 help=H["iz_h"])
     poro = st.sidebar.number_input("porosity (-)", value=0.18, min_value=0.01,
-                                   max_value=0.45, step=0.01, key="iz_phi")
-    perm = _num("permeability", 150, "mD", key="iz_k", step=10.0)
-    temp = _num("temperature", 150, "degF", key="iz_t", step=5.0)
-    sal = _num("salinity", 90000, "ppm", key="iz_s", step=5000.0)
-    pini = _num("initial pressure", 2600, "psi", key="iz_p", step=50.0)
+                                   max_value=0.45, step=0.01, key="iz_phi",
+                                   help=H["iz_phi"])
+    perm = _num("permeability", 150, "mD", key="iz_k", step=10.0, help=H["iz_k"])
+    temp = _num("temperature", 150, "degF", key="iz_t", step=5.0, help=H["iz_t"])
+    sal = _num("salinity", 90000, "ppm", key="iz_s", step=5000.0, help=H["iz_s"])
+    pini = _num("initial pressure", 2600, "psi", key="iz_p", step=50.0,
+                help=H["iz_p"])
     cr = st.sidebar.number_input("rock compressibility (1/psi)", value=5.0e-6,
-                                 format="%.2e", key="iz_cr")
-    dip = st.sidebar.number_input("dip (deg)", value=0.5, step=0.1, key="iz_dip")
+                                 format="%.2e", key="iz_cr", help=H["iz_cr"])
+    dip = st.sidebar.number_input("dip (deg)", value=0.5, step=0.1, key="iz_dip",
+                                  help=H["iz_dip"])
     az = st.sidebar.number_input("dip azimuth (deg, direction of dip)",
-                                 value=180.0, step=15.0, key="iz_az")
+                                 value=180.0, step=15.0, key="iz_az",
+                                 help=H["iz_az"])
 
     st.sidebar.header("Confining zone")
-    cz_top = _num("top depth", 5700, "ft", key="cz_top", step=50.0)
-    cz_base = _num("base depth", 6000, "ft", key="cz_base", step=50.0)
+    cz_top = _num("top depth", 5700, "ft", key="cz_top", step=50.0,
+                  help=H["cz_top"])
+    cz_base = _num("base depth", 6000, "ft", key="cz_base", step=50.0,
+                   help=H["cz_base"])
 
     st.sidebar.header("Lowermost USDW")
-    usdw_base = _num("base depth", 1200, "ft", key="us_d", step=50.0)
-    usdw_p = _num("initial pressure", 520, "psi", key="us_p", step=10.0)
-    usdw_t = _num("temperature", 80, "degF", key="us_t", step=5.0)
-    usdw_s = _num("salinity", 800, "ppm", key="us_s", step=100.0)
+    usdw_base = _num("base depth", 1200, "ft", key="us_d", step=50.0,
+                     help=H["usdw_base"])
+    usdw_p = _num("initial pressure", 520, "psi", key="us_p", step=10.0,
+                  help=H["usdw_p"])
+    usdw_t = _num("temperature", 80, "degF", key="us_t", step=5.0,
+                  help=H["usdw_t"])
+    usdw_s = _num("salinity", 800, "ppm", key="us_s", step=100.0,
+                  help=H["usdw_s"])
 
     st.sidebar.header("Relative permeability")
-    swr = st.sidebar.slider("residual brine Swr", 0.05, 0.6, 0.35, 0.01)
-    sgr = st.sidebar.slider("residual CO2 Sgr", 0.0, 0.4, 0.20, 0.01)
-    krg0 = st.sidebar.slider("CO2 end-point krg0", 0.05, 1.0, 0.30, 0.01)
-    corey = st.sidebar.slider("Corey exponents (m = n)", 1.5, 5.0, 3.0, 0.1)
+    swr = st.sidebar.slider("residual brine Swr", 0.05, 0.6, 0.35, 0.01,
+                            help=H["swr"])
+    sgr = st.sidebar.slider("residual CO2 Sgr", 0.0, 0.4, 0.20, 0.01,
+                            help=H["sgr"])
+    krg0 = st.sidebar.slider("CO2 end-point krg0", 0.05, 1.0, 0.30, 0.01,
+                             help=H["krg0"])
+    corey = st.sidebar.slider("Corey exponents (m = n)", 1.5, 5.0, 3.0, 0.1,
+                              help=H["corey"])
 
     st.sidebar.header("Threshold pressure")
     method = st.sidebar.selectbox(
         "method", ["auto", "method1", "method2", "method2b", "mud_column"],
-        help="auto compares every method and takes the most protective one "
-             "that applies to this pressure regime")
-    ppg = st.sidebar.number_input("mud weight (ppg)", value=9.0, step=0.1)
-    gel = st.sidebar.number_input("gel strength (psi)", value=10.0, step=1.0)
+        help=H["method"])
+    ppg = st.sidebar.number_input("mud weight (ppg)", value=9.0, step=0.1,
+                                  help=H["ppg"])
+    gel = st.sidebar.number_input("gel strength (psi)", value=10.0, step=1.0,
+                                  help=H["gel"])
 
     st.sidebar.header("Model")
     engine = st.sidebar.radio("engine", ["ve", "analytical"], index=0,
-                              help="ve = vertical-equilibrium numerical solver "
-                                   "(dip, heterogeneity, post-injection "
-                                   "migration); analytical = superposition")
+                              help=H["engine"])
     boundary = st.sidebar.selectbox("boundary", ["infinite", "constant_pressure",
-                                                 "noflow"])
-    cell = _num("fine cell size", 500, "ft", key="dx", step=50.0)
-    half = _num("domain half-width", 15, "mi", key="hw", step=1.0)
+                                                 "noflow"], help=H["boundary"])
+    cell = _num("fine cell size", 500, "ft", key="dx", step=50.0, help=H["cell"])
+    half = _num("domain half-width", 15, "mi", key="hw", step=1.0, help=H["half"])
     end_year = st.sidebar.number_input("simulation end (years)", value=100.0,
-                                       step=10.0)
+                                       step=10.0, help=H["end_year"])
     cutoff = st.sidebar.number_input("plume saturation cutoff", value=0.01,
-                                     step=0.005, format="%.3f")
+                                     step=0.005, format="%.3f",
+                                     help=H["cutoff"])
 
     return {
         "project": {"name": name, "operator": operator, "permit": permit,
@@ -180,10 +205,11 @@ def _project_from_form() -> dict:
 
 def _well_editor() -> list[dict]:
     st.subheader("Injection wells")
+    # st.data_editor takes no `help`, so the table's tooltip text is shown
+    # here instead of hanging off a question mark.
     st.caption("Give either x/y in feet from an arbitrary origin, or latitude "
                "and longitude. Latitude/longitude builds the local frame for "
-               "you and unlocks the GIS map. Rates are million tonnes of CO2 "
-               "per year.")
+               "you and unlocks the GIS map. " + H["wells"])
     default = [
         {"name": "INJ-1", "latitude": 31.9686, "longitude": -99.9018,
          "rate": 0.5, "start_year": 0.0, "stop_year": 20.0},
@@ -195,12 +221,27 @@ def _well_editor() -> list[dict]:
 
 
 # ==========================================================================
-st.title("Area of Review and Post-Injection Site Care")
-st.caption("UIC Class VI, following 40 CFR 146.84 / 146.93 and EPA 816-R-13-005. "
-           "An engineering analysis, not a regulatory determination.")
+theme.hero(
+    "Area of Review and Post-Injection Site Care",
+    "Delineate the AoR, size the corrective-action list and test a PISC "
+    "timeframe, from a project you can hand to a reviewer and rerun.",
+    ("40 CFR 146.84 / 146.93", "EPA 816-R-13-005",
+     "Engineering analysis, not a regulatory determination"))
+
+with st.expander("New here? How this works, in one minute", expanded=False):
+    st.markdown(
+        "Describe the site in the **sidebar**, put the wells in the **table**, "
+        "press **Run**. The panels that appear are the delineation, the "
+        "georeferenced map, the threshold-pressure basis, the PISC case, the "
+        "corrective-action screen, the sensitivity study and the exports. "
+        "Every input carries a tooltip; the **Help** panel at the end of the "
+        "row has a quick start, a glossary, and an honest account of where "
+        "this tool should not be trusted.")
 
 mode = st.radio("Start from", ["Form", "Upload project YAML", "Shipped example"],
-                horizontal=True, label_visibility="collapsed")
+                horizontal=True, label_visibility="collapsed",
+                help="Form builds a project from the sidebar. Shipped example "
+                     "is the fastest way to see a finished run.")
 
 proj_dict = None
 if mode == "Upload project YAML":
@@ -233,11 +274,9 @@ for w in project.warnings:
 col_a, col_b = st.columns([1, 3])
 with col_a:
     run_unc = st.checkbox("run uncertainty analysis", value=False,
-                          help="Tornado plus a Latin-hypercube Monte Carlo on "
-                               "the fast analytical engine, producing a "
-                               "probabilistic AoR")
+                          help=H["uncertainty"])
     n_real = st.number_input("realisations", 40, 1000, 150, 10,
-                             disabled=not run_unc)
+                             disabled=not run_unc, help=H["realisations"])
 with col_b:
     st.json(project.summary(), expanded=False)
 
@@ -297,10 +336,11 @@ else:
                "and pressure-regime applicability all passed their checks.")
 
 tabs = st.tabs(["AoR map", "GIS map", "Threshold", "PISC", "Corrective action",
-                "Uncertainty", "Export"])
+                "Uncertainty", "Export", "Help"])
 
 # ---------------------------------------------------------------- AoR map
 with tabs[0]:
+    theme.lead(guide.LEAD["aor"])
     try:
         import plotly.graph_objects as go  # noqa: F401
 
@@ -313,6 +353,9 @@ with tabs[0]:
         st.pyplot(viz.aor_map(res.aor, x=res.x, y=res.y,
                               dp_field=res.dp_fields.max(axis=0),
                               wells=project.wells))
+    st.caption("Hover any point for its pressure buildup; drag to zoom, "
+               "double-click to reset. The camera icon saves a PNG.")
+
     c1, c2 = st.columns(2)
     c1.write("**Components**")
     c1.json({k: s["aor"][k] for k in
@@ -332,13 +375,15 @@ with tabs[0]:
 
 # ---------------------------------------------------------------- GIS map
 with tabs[1]:
+    theme.lead(guide.LEAD["gis"])
     try:
         from aorpisc import gis
 
         ctx = gis.MapContext.from_project(project)
         c1, c2 = st.columns([2, 3])
         base = c1.selectbox("basemap", list(gis.BASEMAPS),
-                            format_func=lambda k: gis.BASEMAPS[k]["name"])
+                            format_func=lambda k: gis.BASEMAPS[k]["name"],
+                            help=H["basemap"])
         c2.caption(f"Georeferencing: {ctx.note}")
         html = gis.map_html(res.aor, ctx, wells=project.wells,
                             penetrations=res.corrective, basemap=base,
@@ -357,15 +402,16 @@ with tabs[1]:
 
 # -------------------------------------------------------------- threshold
 with tabs[2]:
+    theme.lead(guide.LEAD["threshold"])
     st.pyplot(viz.threshold_comparison(res.thresholds, res.selected_threshold))
     st.dataframe([t.summary() for t in res.thresholds], hide_index=True)
-    st.info("The threshold pressure is the largest single discretionary lever "
-            "in an AoR delineation. A method that does not apply to the site's "
-            "pressure regime is drawn hatched and is excluded from the "
-            "automatic choice.")
+    st.caption("Methods 1 and 2 follow EPA 816-R-13-005 section 3. Method 2b "
+               "is the variant for a partially penetrating conduit; "
+               "mud_column assumes drilling mud still stands in the hole.")
 
 # ------------------------------------------------------------------- PISC
 with tabs[3]:
+    theme.lead(guide.LEAD["pisc"])
     if res.pisc is None:
         st.info("No PISC analysis for this run.")
     else:
@@ -389,12 +435,18 @@ with tabs[3]:
 
 # ----------------------------------------------------- corrective action
 with tabs[4]:
+    theme.lead(guide.LEAD["corrective"])
     st.caption("Upload a CSV of artificial penetrations. Recognised columns: "
                "name, api, type, status, x, y, total_depth, year_drilled, "
                "year_abandoned, plug_depths (semicolon separated), "
                "plug_material, cased, records_complete, mit_passed, notes.")
-    up = st.file_uploader("well list", type=["csv"], key="pens")
-    unit = st.radio("coordinate and depth unit", ["ft", "m"], horizontal=True)
+    up = st.file_uploader("well list", type=["csv"], key="pens",
+                          help="Only name and location are required. The more "
+                               "columns you supply, the more of the screen "
+                               "runs: plug depths and records decide whether a "
+                               "well is a candidate for re-entry.")
+    unit = st.radio("coordinate and depth unit", ["ft", "m"], horizontal=True,
+                    help=H["pens_unit"])
     if up is not None:
         import tempfile
 
@@ -437,6 +489,7 @@ with tabs[4]:
 
 # ------------------------------------------------------------ uncertainty
 with tabs[5]:
+    theme.lead(guide.LEAD["uncertainty"])
     unc = res.uncertainty or {}
     if not unc:
         st.info("Tick 'run uncertainty analysis' before running to produce a "
@@ -460,15 +513,16 @@ with tabs[5]:
 
 # ----------------------------------------------------------------- export
 with tabs[6]:
-    st.write("Everything below is generated from this run.")
+    theme.lead(guide.LEAD["export"])
     crs = None
-    use_crs = st.checkbox("georeference the exports")
+    use_crs = st.checkbox("georeference the exports", help=H["georef"])
     if use_crs:
         kind = st.radio("transform", ["EPSG code (exact)",
                                       "origin lon/lat (approximate)"],
                         horizontal=True)
         if kind.startswith("EPSG"):
-            epsg = st.number_input("EPSG", value=32614, step=1)
+            epsg = st.number_input("EPSG", value=32614, step=1,
+                                   help=H["epsg"])
             try:
                 crs = exporters.LocalCRS(epsg=int(epsg))
             except ImportError as exc:
@@ -499,6 +553,8 @@ with tabs[6]:
                         dp=res.dp_fields, plume=res.plume_fields)
     st.download_button("Gridded fields (.npz)", buf.getvalue(),
                        "fields.npz", "application/octet-stream")
-    st.caption("40 CFR 146.84(g) requires modelling inputs supporting an AoR "
-               "delineation to be retained for ten years. The project YAML "
-               "plus the field archive is that record.")
+
+# ------------------------------------------------------------------- help
+with tabs[7]:
+    theme.lead(guide.LEAD["help"])
+    guide.render()
