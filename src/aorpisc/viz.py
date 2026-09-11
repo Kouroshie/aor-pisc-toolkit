@@ -1047,14 +1047,19 @@ def plotly_aor_series(series, *, wells=None, theme="light", length_unit="mi"):
     trace_year = []
     for i, snap in enumerate(series):
         name = f"{snap.year:,.0f} yr - {snap.area_acres:,.0f} acres"
+        last = i == len(series) - 1
         first = True
         for gpoly in _polys(snap.aor.aor):
             xy = np.asarray(gpoly.exterior.coords) * scale
             fig.add_trace(go.Scatter(
                 x=xy[:, 0], y=xy[:, 1], mode="lines", name=name,
-                line=dict(color=_rgba(cols[i], 1.0),
-                          width=3 if i == len(series) - 1 else 1.8),
-                fill="toself", fillcolor=_rgba(cols[i], 0.10),
+                line=dict(color=_rgba(cols[i], 1.0), width=3 if last else 1.6),
+                # Only the outermost snapshot is filled. A century on a
+                # five-year cadence is twenty rings, and twenty translucent
+                # fills stack into a solid block that hides the rings the
+                # figure exists to show.
+                fill="toself" if last else None,
+                fillcolor=_rgba(cols[i], 0.10) if last else None,
                 legendgroup=name, showlegend=first,
                 hovertemplate=f"{name}<extra></extra>"))
             trace_year.append(i)
@@ -1086,7 +1091,12 @@ def plotly_aor_series(series, *, wells=None, theme="light", length_unit="mi"):
                f"{series[-1].area_acres:,.0f} acres" if series else "Area of Review"),
         xaxis=dict(title=f"easting ({length_unit})"),
         yaxis=dict(title=f"northing ({length_unit})", scaleanchor="x", scaleratio=1),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        # a dozen-plus entries cannot sit in a horizontal strip without
+        # eating the plot, so a long series gets a vertical legend beside it
+        legend=(dict(orientation="h", yanchor="bottom", y=1.02)
+                if len(series) <= 8 else
+                dict(orientation="v", yanchor="top", y=1.0, x=1.02,
+                     font=dict(size=10))),
         sliders=[dict(active=len(series) - 1, pad={"t": 40},
                       currentvalue={"prefix": "year "}, steps=steps)] if steps else [],
         margin=dict(l=60, r=20, t=70, b=50), height=680)
