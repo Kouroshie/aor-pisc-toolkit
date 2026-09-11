@@ -315,16 +315,19 @@ if res is None:
 # ==========================================================================
 s = res.summary()
 m1, m2, m3, m4 = st.columns(4)
+# The second line of each tile restates the same quantity another way, or
+# names the basis for it. None of them is a change, so delta_color="off"
+# keeps Streamlit from painting them as a rise.
 m1.metric("AoR area", f"{s['aor']['aor_area_acres']:,.0f} acres",
-          f"{s['aor']['aor_area_sq_mi']:,.1f} sq mi")
+          f"{s['aor']['aor_area_sq_mi']:,.1f} sq mi", delta_color="off")
 m2.metric("Threshold dP", f"{s['threshold']['delta_p_critical_psi']:,.0f} psi",
-          s["threshold"]["method"].split(" - ")[0])
+          s["threshold"]["method"].split(" - ")[0], delta_color="off")
 m3.metric("CO2 injected", f"{U.mass_out(project.total_injected_mass(), 'MMT'):,.1f} MMT")
 if res.pisc:
     rec = s["pisc"]["recommended_pisc"].get("recommended_years", float("nan"))
     m4.metric("PISC supported by model",
               f"{rec:,.0f} yr" if np.isfinite(rec) else "not demonstrated",
-              s["pisc"]["recommended_pisc"].get("basis", ""))
+              s["pisc"]["recommended_pisc"].get("basis", ""), delta_color="off")
 
 if res.warnings:
     with st.expander(f"{len(set(res.warnings))} model-integrity item(s) to review",

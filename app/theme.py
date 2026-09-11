@@ -133,11 +133,13 @@ h2 {{ margin-top: 1.6rem; }}
   font-size: .76rem; font-weight: 700; letter-spacing: .07em;
   text-transform: uppercase; color: var(--ink-3);
 }}
-/* Our deltas are descriptions ("11.4 sq mi", "Method 1"), not changes, so the
-   green up-arrow Streamlit paints on them states something untrue. */
+/* Our deltas are descriptions ("11.4 sq mi", "Method 1"), not changes. The
+   call site passes delta_color="off"; the arrow and the green "this went up"
+   wash survive that, and both state something untrue, so they go here. */
 [data-testid="stMetricDelta"] svg {{ display: none; }}
 [data-testid="stMetricDelta"] {{
-  color: var(--ink-2) !important; font-size: .82rem; font-weight: 500; padding-left: 0;
+  background: transparent !important; padding-left: 0;
+  color: var(--ink-2) !important; font-size: .82rem; font-weight: 500;
 }}
 [data-testid="stMetricDelta"] div {{ color: var(--ink-2) !important; }}
 
