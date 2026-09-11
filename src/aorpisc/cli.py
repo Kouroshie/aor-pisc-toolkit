@@ -100,6 +100,18 @@ def cmd_run(args) -> int:
         if res.corrective:
             exporters.table_to_csv(res.corrective.table(),
                                    os.path.join(out, f"{stem}_wells.csv"))
+        try:
+            from . import gis
+
+            ctx = gis.MapContext.from_project(proj)
+            gis.write_map(res.aor, os.path.join(out, f"{stem}_map.html"), ctx,
+                          wells=proj.wells,
+                          penetrations=res.corrective,
+                          title=f"{proj.name} - Area of Review")
+        except ImportError as exc:
+            _p(f"   (no GIS map: {exc})")
+        except ValueError as exc:
+            _p(f"   (no GIS map: {exc})")
         report.write_json(res, os.path.join(out, f"{stem}_summary.json"))
         if not args.no_report:
             report.write_html(res, os.path.join(out, f"{stem}_report.html"))

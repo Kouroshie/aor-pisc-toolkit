@@ -64,6 +64,8 @@ class ArtificialPenetration:
     records_complete: bool | None = None
     mit_passed: bool | None = None
     notes: str = ""
+    latitude: float = float("nan")
+    longitude: float = float("nan")
 
     # populated by the screen
     in_aor: bool = False
@@ -377,13 +379,20 @@ def newly_included(previous: CorrectiveActionPlan, current: CorrectiveActionPlan
 
 
 def load_wells_csv(path: str, *, x_col="x", y_col="y", name_col="name",
-                   unit: str = "m", **column_map) -> list[ArtificialPenetration]:
+                   unit: str = "m", crs=None, **column_map
+                   ) -> list[ArtificialPenetration]:
     """Read a well table from CSV.
 
     Column names are configurable; anything matching an
     :class:`ArtificialPenetration` field is picked up automatically.
     ``unit`` converts the coordinate and depth columns (``"m"`` or ``"ft"``).
     Semicolon-separated plug depths in a ``plug_depths`` column are parsed.
+
+    If the file has ``latitude`` and ``longitude`` columns and ``crs`` is a
+    :class:`aorpisc.io.exporters.LocalCRS`, those are used in preference to
+    ``x``/``y`` and converted into the model frame. State well lists come out
+    of RRC, TWDB and commercial databases in latitude and longitude, so this
+    is usually the path of least resistance.
     """
     import csv
 
@@ -393,11 +402,21 @@ def load_wells_csv(path: str, *, x_col="x", y_col="y", name_col="name",
         for row in csv.DictReader(fh):
             row = {(column_map.get(k, k) or k).strip(): (v.strip() if isinstance(v, str) else v)
                    for k, v in row.items() if k}
+            lat = row.get("latitude") or row.get("lat")
+            lon = row.get("longitude") or row.get("lon") or row.get("long")
+            if crs is not None and lat and lon:
+                import numpy as _np
+                gx, gy = crs.from_lonlat(_np.array([float(lon)]), _np.array([float(lat)]))
+                wx, wy = float(gx[0]), float(gy[0])
+            else:
+                wx = float(row[x_col]) * scale
+                wy = float(row[y_col]) * scale
             w = ArtificialPenetration(
                 name=row.get(name_col) or row.get("name") or row.get("api") or "unnamed",
-                x=float(row[x_col]) * scale,
-                y=float(row[y_col]) * scale,
+                x=wx, y=wy,
             )
+            if lat and lon:
+                w.latitude, w.longitude = float(lat), float(lon)
             for f in ("api", "kind", "status", "plug_material", "notes"):
                 if row.get(f):
                     setattr(w, f, row[f])

@@ -27,6 +27,7 @@ aorpisc run examples/epa_hypothetical_site.yaml -o out/
 | **Corrective action** | EPA's Figure 4-3 decision tree applied to every penetration, **plus phased corrective action scheduled by modelled arrival time** |
 | **PISC** | Plume area, expansion rate, effective-radius migration rate, directional migration, pressure decline, plume-stabilisation year, a defensible PISC duration, and the 40 CFR 146.93(c) checklist |
 | **Uncertainty** | Tornado sensitivity and a Latin-hypercube Monte Carlo producing a **probabilistic AoR** (P10 / P50 / P90 boundaries) |
+| **GIS map** | A self-contained HTML map on switchable satellite / street / topographic / relief basemaps, with the AoR, both components and every artificial penetration colour-coded by required action, a measuring tool, and popups carrying each well's determination and its modelled arrival year. No API key, no account, opens offline |
 | **Reporting** | One self-contained HTML report, organised the way an AoR & Corrective Action Plan and a PISC & Site Closure Plan are organised, with the regulatory citation on every section |
 
 ---
@@ -51,6 +52,7 @@ Class VI permit:
 | Uncertainty | one-at-a-time tornado | tornado **and** Latin-hypercube Monte Carlo with a probabilistic AoR |
 | Corrective action | none | EPA decision tree + arrival-time phasing |
 | PISC | none | full 146.93 metrics and checklist |
+| GIS output | none | GeoJSON, KML and an interactive satellite-imagery map |
 | Licence / platform | free binary, Windows, MATLAB Runtime | Apache-2.0 source, any OS, pip-installable, scriptable, CI-tested |
 
 The last row is not a small point. EPA notes that proprietary codes "may

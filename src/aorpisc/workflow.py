@@ -90,6 +90,23 @@ class ProjectResult:
         return out
 
 
+def project_crs(p: Project):
+    """The coordinate transform a project implies, or None if ungeoreferenced."""
+    from .io.exporters import LocalCRS
+
+    cfg = getattr(p, "crs", None) or {}
+    if cfg.get("epsg"):
+        return LocalCRS(epsg=int(cfg["epsg"]),
+                        x_offset=float(cfg.get("x_offset", 0.0)),
+                        y_offset=float(cfg.get("y_offset", 0.0)))
+    if cfg.get("origin_lon") is not None:
+        return LocalCRS(origin_lon=float(cfg["origin_lon"]),
+                        origin_lat=float(cfg["origin_lat"]),
+                        x_offset=float(cfg.get("x_offset", 0.0)),
+                        y_offset=float(cfg.get("y_offset", 0.0)))
+    return None
+
+
 # ==========================================================================
 def select_threshold(p: Project, results: list[threshold.ThresholdResult]
                      ) -> threshold.ThresholdResult:
@@ -408,7 +425,7 @@ def run(p: Project, *, penetrations: list | None = None,
     if penetrations is None and p.penetrations_csv:
         say("loading artificial penetrations")
         penetrations = corrective.load_wells_csv(
-            p.penetrations_csv, unit=p.penetrations_unit)
+            p.penetrations_csv, unit=p.penetrations_unit, crs=project_crs(p))
     if penetrations:
         say("screening artificial penetrations")
         cz_top = (p.confining_zone.top_depth if np.isfinite(p.confining_zone.top_depth)
@@ -553,4 +570,4 @@ def run_uncertainty_analysis(p: Project, th: threshold.ThresholdResult,
 
 
 __all__ = ["ProjectResult", "run", "select_threshold", "analytical_cross_checks",
-           "run_uncertainty_analysis"]
+           "run_uncertainty_analysis", "project_crs"]

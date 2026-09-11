@@ -406,6 +406,31 @@ def build_html(result, *, include_figures: bool = True,
             _rows_table(u["monte_carlo"]["aor_area_acres"]["rank_correlations"]),
         ]
 
+    # 5c the GIS map
+    try:
+        from . import gis
+
+        ctx = gis.MapContext.from_project(p)
+        parts += [
+            "<h2>5c. Map</h2>",
+            _callout("good", "An interactive map was written alongside this report",
+                     "Open <code>*_map.html</code> from the same output directory. "
+                     "It carries the AoR, its two components and every artificial "
+                     "penetration on switchable satellite, street, topographic and "
+                     "relief basemaps, with a measuring tool, and it opens offline "
+                     "in any browser. Georeferencing: "
+                     + html.escape(ctx.note) + "."),
+        ]
+    except Exception:
+        parts += [
+            "<h2>5c. Map</h2>",
+            _callout("warning", "No GIS map for this run",
+                     "The project has no georeferencing, so the AoR cannot be "
+                     "placed on a real map. Give the wells "
+                     "<code>latitude</code> and <code>longitude</code>, or set "
+                     "<code>project.crs.epsg</code>."),
+        ]
+
     # 6 figures
     if figs:
         parts.append("<h2>6. Figures</h2>")

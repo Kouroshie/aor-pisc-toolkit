@@ -54,6 +54,7 @@ class LocalCRS:
 
     def __post_init__(self):
         self._tf = None
+        self._inv = None
         if self.epsg is not None:
             if not HAVE_PYPROJ:
                 raise ImportError(
@@ -61,6 +62,8 @@ class LocalCRS:
                     "install it, or give origin_lon/origin_lat instead")
             self._tf = Transformer.from_crs(f"EPSG:{self.epsg}", "EPSG:4326",
                                             always_xy=True)
+            self._inv = Transformer.from_crs("EPSG:4326", f"EPSG:{self.epsg}",
+                                             always_xy=True)
 
     @property
     def exact(self) -> bool:
@@ -81,6 +84,26 @@ class LocalCRS:
         m_per_deg_lon = 111412.84 * math.cos(lat0) - 93.5 * math.cos(3 * lat0)
         return (self.origin_lon + x / m_per_deg_lon,
                 self.origin_lat + y / m_per_deg_lat)
+
+    def from_lonlat(self, lon, lat):
+        """Inverse of :meth:`to_lonlat`: longitude/latitude to model metres.
+
+        Lets a project give well locations in latitude and longitude and have
+        the local frame built for it, which is how site data actually arrives.
+        """
+        lon = np.asarray(lon, float)
+        lat = np.asarray(lat, float)
+        if self._inv is not None:
+            x, y = self._inv.transform(lon, lat)
+            return np.asarray(x) - self.x_offset, np.asarray(y) - self.y_offset
+        if self.origin_lon is None or self.origin_lat is None:
+            return lon, lat
+        lat0 = math.radians(self.origin_lat)
+        m_per_deg_lat = (111132.92 - 559.82 * math.cos(2 * lat0)
+                         + 1.175 * math.cos(4 * lat0))
+        m_per_deg_lon = 111412.84 * math.cos(lat0) - 93.5 * math.cos(3 * lat0)
+        return ((lon - self.origin_lon) * m_per_deg_lon - self.x_offset,
+                (lat - self.origin_lat) * m_per_deg_lat - self.y_offset)
 
     def describe(self) -> dict:
         if self._tf is not None:

@@ -18,9 +18,12 @@ project:
   permit: n/a
   datum: ground surface, depths positive downward
   crs:
-    # UTM zone 14N. With pyproj installed the GeoJSON and KML exports carry
-    # true longitude/latitude; without it they stay in model metres.
-    epsg: 32614
+    # UTM zone 15N. Wells are given in latitude/longitude below, so this is
+    # only here to pin the frame; without it the toolkit would pick the zone
+    # itself from the well locations.
+    epsg: 32615
+    x_offset: 408000.0
+    y_offset: 3320000.0
   notes: >
     Six-year staggered start-up across four injectors with one brine
     extractor for pressure management. Threshold pressure follows the Texas
@@ -79,22 +82,22 @@ threshold:
 
 wells:
   - name: INJ-A1
-    x: 0
-    y: 0
+    latitude: 29.98
+    longitude: -94.13
     rate: 0.9
     start_year: 0
     stop_year: 25
 
   - name: INJ-A2
-    x: 5200
-    y: 900
+    latitude: 29.982475
+    longitude: -94.113577
     rate: 0.9
     start_year: 2
     stop_year: 25
 
   - name: INJ-B1
-    x: 2400
-    y: 6100
+    latitude: 29.996773
+    longitude: -94.12242
     # a stepped schedule: ramps up, then throttles back late in life
     schedule:
       - {year: 4,  rate: 0.5}
@@ -103,15 +106,15 @@ wells:
       - {year: 25, rate: 0.0}
 
   - name: INJ-B2
-    x: 7600
-    y: 5400
+    latitude: 29.994848
+    longitude: -94.105996
     rate: 0.8
     start_year: 6
     stop_year: 25
 
   - name: EXT-1
-    x: 3900
-    y: 3100
+    latitude: 29.988524
+    longitude: -94.117682
     kind: extractor
     rate: 9000                 # bbl/day of brine, for pressure management
     start_year: 4
@@ -132,6 +135,8 @@ plume:
   criterion: column-averaged CO2 saturation >= 0.02
 
 penetrations:
+  # The CSV gives latitude/longitude, which is how well lists actually arrive
+  # from RRC, TWDB and commercial databases. Depths stay in coordinate_unit.
   csv: examples/gulf_coast_wells.csv
   coordinate_unit: ft
 

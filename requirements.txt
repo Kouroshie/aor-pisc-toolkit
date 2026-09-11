@@ -14,6 +14,7 @@ matplotlib>=3.7
 PyYAML>=6.0
 CoolProp>=6.5          # Span-Wagner CO2; the cubic fallback is unreliable near the critical point
 pyproj>=3.5            # exact EPSG coordinate transforms for GIS export
+folium>=0.15           # the GIS map on real satellite imagery
 streamlit>=1.30
 plotly>=5.18
 pandas>=2.0

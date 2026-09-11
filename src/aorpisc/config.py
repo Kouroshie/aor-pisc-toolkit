@@ -101,6 +101,8 @@ class WellSpec:
     schedule: list[tuple[float, float]] = field(default_factory=list)
     radius: float = 0.1
     max_bhp: float = float("inf")
+    latitude: float = float("nan")
+    longitude: float = float("nan")
 
     def total_mass(self) -> float:
         total, prev_t, prev_q = 0.0, None, 0.0
@@ -227,6 +229,7 @@ class Project:
 
         for w in d.get("wells", []) or []:
             p.wells.append(_well_from_dict(w, un))
+        p._resolve_geography()
 
         th = d.get("threshold", {}) or {}
         p.threshold_method = str(th.get("method", "auto")).lower()
@@ -280,6 +283,61 @@ class Project:
             return cls.from_dict(yaml.safe_load(fh) or {})
 
     # ------------------------------------------------------------------ #
+    def _resolve_geography(self) -> None:
+        """Reconcile latitude/longitude well positions with the local frame.
+
+        Site data arrives as latitude and longitude, not as metres from an
+        arbitrary origin, so a project may give either. When lat/lon is
+        supplied the local frame is built around the wells automatically and
+        the map transform falls out of it, which is what makes a GIS map
+        possible without the user computing anything.
+        """
+        from .io.exporters import HAVE_PYPROJ, LocalCRS
+
+        geo = [w for w in self.wells
+               if np.isfinite(w.latitude) and np.isfinite(w.longitude)]
+        if not geo:
+            return
+
+        lat0 = float(np.mean([w.latitude for w in geo]))
+        lon0 = float(np.mean([w.longitude for w in geo]))
+
+        if self.crs.get("epsg"):
+            crs = LocalCRS(epsg=int(self.crs["epsg"]))
+        elif HAVE_PYPROJ:
+            # the UTM zone the well field falls in: exact, and metres
+            zone = int((lon0 + 180.0) // 6.0) + 1
+            epsg = (32600 if lat0 >= 0 else 32700) + zone
+            crs = LocalCRS(epsg=epsg)
+            self.crs = {"epsg": epsg,
+                        "note": f"UTM zone {zone}{'N' if lat0 >= 0 else 'S'}, "
+                                "chosen automatically from the well locations"}
+        else:
+            crs = LocalCRS(origin_lon=lon0, origin_lat=lat0)
+            self.crs = {"origin_lon": lon0, "origin_lat": lat0,
+                        "note": "local tangent plane about the well field; "
+                                "install pyproj for an exact UTM transform"}
+
+        # Place the origin of the local frame at the centre of the well field,
+        # unless the project pinned it. Pinning matters when one site is
+        # modelled as several projects (one per storage formation): they have
+        # to share a frame or their polygons will not line up when combined.
+        if self.crs.get("x_offset") is not None:
+            crs.x_offset = float(self.crs["x_offset"])
+            crs.y_offset = float(self.crs.get("y_offset", 0.0))
+        else:
+            ox, oy = crs.from_lonlat(np.array([lon0]), np.array([lat0]))
+            crs.x_offset, crs.y_offset = float(ox[0]), float(oy[0])
+        self.crs = dict(self.crs, x_offset=crs.x_offset, y_offset=crs.y_offset)
+
+        for w in self.wells:
+            if np.isfinite(w.latitude) and np.isfinite(w.longitude):
+                x, y = crs.from_lonlat(np.array([w.longitude]), np.array([w.latitude]))
+                w.x, w.y = float(x[0]), float(y[0])
+            elif not (np.isfinite(w.x) and np.isfinite(w.y)):
+                self.warnings.append(
+                    f"well {w.name!r} has neither x/y nor latitude/longitude")
+
     def validate(self) -> list[str]:
         """Check the things that silently ruin an AoR if they are wrong."""
         w = self.warnings
@@ -423,6 +481,8 @@ def _well_from_dict(w: dict, un: Units) -> WellSpec:
 
     return WellSpec(
         name=str(w.get("name", "well")), x=x, y=y, kind=kind, schedule=sched,
+        latitude=float(w["latitude"]) if w.get("latitude") is not None else float("nan"),
+        longitude=float(w["longitude"]) if w.get("longitude") is not None else float("nan"),
         radius=U.length(float(w.get("radius", 0.33)), w.get("radius_unit", "ft")),
         max_bhp=(U.pressure(float(w["max_bhp"]), un.pressure)
                  if w.get("max_bhp") is not None else float("inf")),

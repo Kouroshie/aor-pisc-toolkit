@@ -25,7 +25,7 @@ print(project.warnings)      # read these before you trust anything
 | `permit` | string | optional |
 | `datum` | string | **state it.** "ground surface, depths positive downward", "MSL", "KB". Threshold pressure is sensitive to the datum and the number is meaningless without it |
 | `notes` | string | free text, carried into the report |
-| `crs` | mapping | `{epsg: 32614}` for an exact transform (needs `pyproj`), or `{origin_lon: -97.5, origin_lat: 27.5}` for a local tangent-plane approximation |
+| `crs` | mapping | `{epsg: 32614}` for an exact transform (needs `pyproj`), or `{origin_lon: -97.5, origin_lat: 27.5}` for a local tangent-plane approximation. Usually unnecessary: give the wells `latitude`/`longitude` and the frame is built for you. Add `x_offset`/`y_offset` to **pin** the frame, which is required when one site is modelled as several projects (one per storage formation) whose polygons are combined later |
 
 ---
 
@@ -147,8 +147,22 @@ pass unnoticed.
 
 ## `wells`
 
+Wells take **either** local `x`/`y` **or** `latitude`/`longitude`. Latitude and
+longitude is the better path: the local frame is built around the well field
+automatically, the UTM zone is chosen for you, and the GIS map becomes
+available without you computing anything.
+
 ```yaml
 wells:
+  # the recommended form
+  - name: INJ-0
+    latitude: 31.9686
+    longitude: -99.9018
+    rate: 1.0
+    start_year: 0
+    stop_year: 20
+
+  # local coordinates still work
   - name: INJ-1
     x: 0                  # in units.length, from an arbitrary project origin
     y: 0
@@ -268,6 +282,7 @@ CSV columns, all optional except `name`, `x`, `y`:
 |---|---|
 | `name`, `api` | identifiers |
 | `x`, `y` | in `coordinate_unit`, same origin as the project wells |
+| `latitude`, `longitude` | decimal degrees, used in preference to `x`/`y` when the project is georeferenced. This is how well lists arrive from RRC, TWDB and commercial databases |
 | `type` / `kind` | oil, gas, injection, water, dry hole, mine |
 | `status` | active, shut-in, plugged, abandoned, unknown |
 | `total_depth` | in `coordinate_unit`. **Missing depth is flagged**: 40 CFR 146.84(c)(2) requires it |

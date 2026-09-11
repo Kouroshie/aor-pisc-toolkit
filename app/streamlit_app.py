@@ -130,13 +130,15 @@ def _project_from_form() -> dict:
 
 def _well_editor() -> list[dict]:
     st.subheader("Injection wells")
-    st.caption("Coordinates are feet from an arbitrary project origin. Rates "
-               "are million tonnes of CO2 per year.")
+    st.caption("Give either x/y in feet from an arbitrary origin, or latitude "
+               "and longitude. Latitude/longitude builds the local frame for "
+               "you and unlocks the GIS map. Rates are million tonnes of CO2 "
+               "per year.")
     default = [
-        {"name": "INJ-1", "x": 0.0, "y": 0.0, "rate": 0.5,
-         "start_year": 0.0, "stop_year": 20.0},
-        {"name": "INJ-2", "x": 4000.0, "y": 0.0, "rate": 0.5,
-         "start_year": 0.0, "stop_year": 20.0},
+        {"name": "INJ-1", "latitude": 31.9686, "longitude": -99.9018,
+         "rate": 0.5, "start_year": 0.0, "stop_year": 20.0},
+        {"name": "INJ-2", "latitude": 31.9686, "longitude": -99.8890,
+         "rate": 0.5, "start_year": 0.0, "stop_year": 20.0},
     ]
     edited = st.data_editor(default, num_rows="dynamic", key="wells",
                             use_container_width=True)
@@ -242,7 +244,7 @@ else:
     st.success("Domain size, grid resolution, boundary influence, mass balance "
                "and pressure-regime applicability all passed their checks.")
 
-tabs = st.tabs(["AoR map", "Threshold", "PISC", "Corrective action",
+tabs = st.tabs(["AoR map", "GIS map", "Threshold", "PISC", "Corrective action",
                 "Uncertainty", "Export"])
 
 # ---------------------------------------------------------------- AoR map
@@ -277,8 +279,35 @@ with tabs[0]:
               "distance (mi)": U.length_out(v, "mi")} for k, v in az.items()],
             use_container_width=True, hide_index=True)
 
-# -------------------------------------------------------------- threshold
+# ---------------------------------------------------------------- GIS map
 with tabs[1]:
+    try:
+        import streamlit.components.v1 as components
+
+        from aorpisc import gis
+
+        ctx = gis.MapContext.from_project(project)
+        c1, c2 = st.columns([2, 3])
+        base = c1.selectbox("basemap", list(gis.BASEMAPS),
+                            format_func=lambda k: gis.BASEMAPS[k]["name"])
+        c2.caption(f"Georeferencing: {ctx.note}")
+        html = gis.map_html(res.aor, ctx, wells=project.wells,
+                            penetrations=res.corrective, basemap=base,
+                            title=f"{project.name} - Area of Review")
+        components.html(html, height=640, scrolling=False)
+        st.download_button("Download this map as a standalone HTML file", html,
+                           "aor_map.html", "text/html")
+        st.caption("The downloaded file opens offline in any browser, with the "
+                   "basemaps, the layer switcher and the measuring tool intact. "
+                   "It is the artefact to send to a landman, a field inspector "
+                   "or a surface owner.")
+    except ImportError as exc:
+        st.warning(str(exc))
+    except ValueError as exc:
+        st.info(str(exc))
+
+# -------------------------------------------------------------- threshold
+with tabs[2]:
     st.pyplot(viz.threshold_comparison(res.thresholds, res.selected_threshold))
     st.dataframe([t.summary() for t in res.thresholds],
                  use_container_width=True, hide_index=True)
@@ -288,7 +317,7 @@ with tabs[1]:
             "automatic choice.")
 
 # ------------------------------------------------------------------- PISC
-with tabs[2]:
+with tabs[3]:
     if res.pisc is None:
         st.info("No PISC analysis for this run.")
     else:
@@ -312,7 +341,7 @@ with tabs[2]:
             use_container_width=True, hide_index=True)
 
 # ----------------------------------------------------- corrective action
-with tabs[3]:
+with tabs[4]:
     st.caption("Upload a CSV of artificial penetrations. Recognised columns: "
                "name, api, type, status, x, y, total_depth, year_drilled, "
                "year_abandoned, plug_depths (semicolon separated), "
@@ -360,7 +389,7 @@ with tabs[3]:
         st.info("No well list loaded yet.")
 
 # ------------------------------------------------------------ uncertainty
-with tabs[4]:
+with tabs[5]:
     unc = res.uncertainty or {}
     if not unc:
         st.info("Tick 'run uncertainty analysis' before running to produce a "
@@ -384,7 +413,7 @@ with tabs[4]:
                      unc.get("percentile_ratio_to_base", {})})
 
 # ----------------------------------------------------------------- export
-with tabs[5]:
+with tabs[6]:
     st.write("Everything below is generated from this run.")
     crs = None
     use_crs = st.checkbox("georeference the exports")
