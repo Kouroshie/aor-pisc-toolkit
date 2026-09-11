@@ -5,11 +5,24 @@ page chrome and the figures drawn into it are one system rather than two that
 happen to sit next to each other.  Only the page furniture lives in this
 module; figure styling stays in ``viz``.
 
+Two things are deliberately not done here.
+
+Headings are not restyled in CSS.  Streamlit sets heading fonts through its
+own theme with a specificity a plain ``h1`` selector cannot beat, so the
+display face is set in ``.streamlit/config.toml`` as ``headingFont``, which is
+the supported lever.  ``serif`` there means the Source Serif that Streamlit
+already ships, so nothing is fetched from a font CDN at page load.
+
+No web fonts are loaded.  An ``@import`` of Google Fonts here looked fine and
+silently did nothing, leaving every rule that named those families on its
+fallback.  Both faces below ship with Streamlit itself.
+
 A note on selectors.  Streamlit's internal class names move between versions,
-so everything below keys off stable ``data-testid`` / ``data-baseweb`` hooks
-and, where a hook has been renamed in the past, both spellings are listed.
-The styling is additive: if a future version renames a hook, that element
-falls back to stock Streamlit rather than breaking the page.
+so everything below keys off ``data-testid`` hooks, and where a hook has been
+renamed the old spelling is listed alongside the new one: 1.63 moved the tab
+strip from BaseWeb to React Aria, renaming ``[data-baseweb="tab"]`` to
+``[data-testid="stTab"]``.  The styling is additive, so a hook that is renamed
+again leaves that element stock rather than breaking the page.
 """
 
 from __future__ import annotations
@@ -18,22 +31,14 @@ import streamlit as st
 
 from aorpisc import viz
 
-_FONTS = ("https://fonts.googleapis.com/css2"
-          "?family=Inter:wght@400;500;600;700"
-          "&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700"
-          "&display=swap")
-
-_UI = ("Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, "
-       "'Helvetica Neue', Arial, sans-serif")
-_DISPLAY = "'Source Serif 4', Georgia, 'Times New Roman', serif"
+_UI = "'Source Sans', 'Segoe UI', system-ui, -apple-system, sans-serif"
+_DISPLAY = "'Source Serif', Georgia, 'Times New Roman', serif"
 
 
 def css() -> str:
     """The stylesheet, built from the figure palette."""
     p = viz.palette("light")
     return f"""
-@import url('{_FONTS}');
-
 :root {{
   --surface: {p["surface"]};
   --panel: #ffffff;
@@ -53,21 +58,14 @@ def css() -> str:
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.04);
 }}
 
-html, body, .stApp, [data-testid="stAppViewContainer"] {{
-  font-family: {_UI};
-  color: var(--ink);
-}}
 .block-container {{ padding-top: 2.4rem; max-width: 1500px; }}
 
 /* ---------------------------------------------------------- typography */
-h1, h2, h3, h4 {{
-  font-family: {_DISPLAY};
-  letter-spacing: -0.012em;
-  color: var(--ink);
-}}
-h1 {{ font-size: 2.5rem; font-weight: 700; line-height: 1.15; margin-bottom: .15rem; }}
-h2 {{ font-size: 1.5rem; font-weight: 700; margin-top: 1.6rem; }}
-h3 {{ font-size: 1.18rem; font-weight: 600; }}
+/* The face itself comes from theme.headingFont in config.toml; only the
+   spacing is set here, which Streamlit leaves alone. */
+h1, h2, h3, h4 {{ letter-spacing: -0.012em; color: var(--ink); }}
+h1 {{ line-height: 1.15; margin-bottom: .15rem; }}
+h2 {{ margin-top: 1.6rem; }}
 [data-testid="stCaptionContainer"] p, .stCaption p {{
   color: var(--ink-2); font-size: .88rem; line-height: 1.5;
 }}
@@ -92,27 +90,31 @@ h3 {{ font-size: 1.18rem; font-weight: 600; }}
 /* --------------------------------------------------------------- tabs */
 /* The result panels are the point of the page, so the tab strip reads as a
    real control: a segmented bar, with the open panel as a card beneath it. */
-.stTabs [data-baseweb="tab-list"] {{
+.stTabs [role="tablist"], .stTabs [data-baseweb="tab-list"] {{
   gap: .25rem; padding: .3rem; background: var(--panel-2);
   border: 1px solid var(--line); border-radius: 14px; flex-wrap: wrap;
 }}
-.stTabs [data-baseweb="tab"] {{
-  height: auto; padding: .58rem 1.05rem; border-radius: 10px;
+.stTabs [data-testid="stTab"], .stTabs [data-baseweb="tab"] {{
+  height: auto; padding: .55rem 1.05rem; border-radius: 10px;
   font-family: {_UI}; font-size: .95rem; font-weight: 600; color: var(--ink-2);
-  transition: background .15s ease, color .15s ease;
+  cursor: pointer; transition: background .15s ease, color .15s ease;
 }}
-.stTabs [data-baseweb="tab"] p {{ font-size: .95rem; font-weight: 600; margin: 0; }}
-.stTabs [data-baseweb="tab"]:hover {{
+.stTabs [data-testid="stTab"] p, .stTabs [data-baseweb="tab"] p {{
+  font-size: .95rem; font-weight: 600; margin: 0; color: inherit;
+}}
+.stTabs [data-testid="stTab"]:hover, .stTabs [data-baseweb="tab"]:hover {{
   background: var(--brand-wash); color: var(--brand-deep);
 }}
 .stTabs [aria-selected="true"] {{
   background: var(--brand); color: #fff; box-shadow: 0 1px 3px rgba(16, 24, 40, .18);
 }}
 .stTabs [aria-selected="true"] p {{ color: #fff; }}
+/* The open tab is a filled pill, so the underline marking it is redundant. */
+.stTabs .react-aria-SelectionIndicator,
 .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] {{
   display: none;
 }}
-.stTabs [data-baseweb="tab-panel"] {{
+.stTabs [data-testid="stTabPanel"], .stTabs [data-baseweb="tab-panel"] {{
   border: 1px solid var(--line); border-radius: 16px; background: var(--panel);
   padding: 1.35rem 1.35rem .6rem; margin-top: .9rem; box-shadow: var(--shadow);
 }}

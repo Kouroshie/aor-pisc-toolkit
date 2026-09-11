@@ -7,6 +7,14 @@ backgroundColor = "#fcfcfb"
 secondaryBackgroundColor = "#f2f1ee"
 textColor = "#0b0b0b"
 
+# Headings in a serif, body and controls in the sans. Streamlit owns heading
+# typography with a specificity that app CSS cannot beat, so it is set here
+# rather than in app/theme.py. "serif" is the Source Serif that ships with
+# Streamlit, so nothing is fetched from a font CDN while the page loads.
+# Older Streamlit versions ignore these keys with a log line and keep their
+# defaults, which is why the package floor can stay where it is.
+headingFont = "serif"
+
 [server]
 maxUploadSize = 50
 
