@@ -168,6 +168,41 @@ the AoR boundary sits. State the cutoff, and test it.
 | pressure dissipates with open boundaries | `test_pressure_dissipates_with_open_boundaries` |
 | column-averaged saturation stays within `[0, 1-Swr]` | `test_saturation_proxy_is_bounded` |
 
+### Where the VE assumption stops being a good one
+
+Vertical equilibrium collapses the injection zone into a single buoyant tongue
+at its top. Whether that is a description or a caricature depends entirely on
+the thickness of the zone and on what is inside it.
+
+Rebuilding published Class VI applications and comparing against the
+operator's own AoR figure shows the boundary clearly:
+
+| gross zone thickness | how this toolkit compares against a 3-D compositional model |
+|---|---|
+| up to a few hundred feet | within a few per cent |
+| ~500 ft and up, with internal shales | over-predicts, by 1.5x or more at ~2,000 ft |
+
+The mechanism is straightforward. Given the same injected mass, a plume that
+floats entirely to the top of a 2,000 ft package has less thickness to occupy
+than one distributed across the individual sands near the completions, so it
+spreads further. A 3-D model with `kv/kh` of 0.1 and shale baffles keeps much
+of the CO2 down; this solver does not, because it cannot.
+
+**What to do about it.** Up to a few hundred feet, use the VE result directly.
+Past that, treat it as a conservative upper bound and say so in the plan -- it
+errs in the protective direction, which is the right direction to err for an
+AoR, but a reviewer should be told which way the model leans. Where the
+individual sands are correlatable, run each as its own project on a pinned
+frame and union the AoRs; that at least gets the per-sand thickness right.
+
+A related warning sign: **on a thin zone the analytical and VE engines should
+agree, and when they do not the zone thickness is usually the reason.** The
+analytical radial Buckley-Leverett model distributes CO2 across the full
+thickness; VE floats it. A large gap between the two engines at the same
+inputs means the vertical distribution is doing more work than either model
+can justify on its own. `workflow.run` reports both, and the cross-check is
+there to be read, not skipped.
+
 ---
 
 ## 5. Delineation geometry
@@ -274,13 +309,44 @@ positive* values, and that is now what triggers the warning.
 
 ---
 
+## 11. Against published applications
+
+The most useful check available without a simulator licence is a published
+Class VI application: the operator states an AoR area, prints a map of it, and
+lists enough of the reservoir description to rebuild the case. Doing that for
+several such applications is what produced the VE thickness guidance in
+section 4 and both fixes in commit `1c8f0f2` (a foot-based projected CRS
+silently scaling the model by 3.28; sealing faults being unreachable from a
+project file).
+
+Two things that exercise is good for, beyond the headline area:
+
+* **A figure can be georeferenced from the well coordinates the applicant
+  publishes**, by fitting a similarity transform to the wells visible on the
+  map. On one application this recovered the figure's scale to 1.0 % of its own
+  printed scale bar and its rotation to 0.2 degrees. That is enough to lay a
+  modelled AoR over the operator's own map and compare them by shape, not just
+  by area.
+* **Sensitivity beats agreement.** Where an applicant omits a parameter, the
+  useful output is not a number but a sweep: on one submission the AoR ran from
+  331 sq mi to 0.7 sq mi as the net sand thickness went from 36 ft to 600 ft,
+  which identifies precisely which missing number a reviewer has to request.
+
+The runs themselves are not in this repository. Several of the source
+documents are marked as containing confidential business information, so
+nothing operator-specific is published here.
+
+---
+
 ## What is not validated
 
 * **No comparison against a commercial simulator.** The VE solver is checked
   against an analytical solution and against its own conservation laws, not
-  against CMG-GEM, ECLIPSE or TOUGH2. If you have a licensed model of a real
-  site, running it against this toolkit and opening an issue with the
-  comparison would be the single most valuable contribution to this project.
+  against CMG-GEM, ECLIPSE or TOUGH2 directly -- only against the *published
+  results* of such models, which is weaker because the inputs are never fully
+  published. If you have a licensed model of a real site, running it against
+  this toolkit and opening an issue with the comparison would be the single
+  most valuable contribution to this project.
 * **No field data.** Nothing here has been history-matched to a real
   injection.
 * **Geochemistry, geomechanics and induced seismicity are out of scope**, so
