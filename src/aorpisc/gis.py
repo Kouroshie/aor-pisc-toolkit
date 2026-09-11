@@ -35,6 +35,8 @@ an unstated datum is not evidence.
 
 from __future__ import annotations
 
+import json
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -352,8 +354,28 @@ def build_map(result, ctx: MapContext, *, wells=None, penetrations=None,
     pad = zoom_padding
     dlat = (centre[1][0] - centre[0][0]) * pad
     dlon = (centre[1][1] - centre[0][1]) * pad
-    m.fit_bounds([[centre[0][0] - dlat, centre[0][1] - dlon],
-                  [centre[1][0] + dlat, centre[1][1] + dlon]])
+    bounds = [[centre[0][0] - dlat, centre[0][1] - dlon],
+              [centre[1][0] + dlat, centre[1][1] + dlon]]
+    m.fit_bounds(bounds)
+
+    # Leaflet works out the zoom from the size of its container, and a host
+    # that lays the page out after the script runs -- an iframe that sizes to
+    # its content, a tab that starts hidden, a print stylesheet -- gives it a
+    # container of no height. The map then comes up zoomed out to the whole
+    # world with no error anywhere. Re-measuring and re-fitting once the
+    # window has finished loading costs nothing and makes the map independent
+    # of how it is embedded.
+    m.get_root().script.add_child(folium.Element(f"""
+        (function () {{
+            var refit = function () {{
+                var mp = {m.get_name()};
+                if (!mp) return;
+                mp.invalidateSize();
+                mp.fitBounds({json.dumps(bounds)});
+            }};
+            window.addEventListener("load", function () {{ setTimeout(refit, 120); }});
+            window.addEventListener("resize", refit);
+        }})();"""))
     m.get_root().html.add_child(folium.Element(
         _legend_html(result, penetrations, ctx, title)))
     return m

@@ -10,10 +10,14 @@ was actually run.
 
 from __future__ import annotations
 
+import hashlib
+import inspect
 import io
 import json
 import os
+import pathlib
 import sys
+import tempfile
 
 import numpy as np
 import streamlit as st
@@ -29,6 +33,52 @@ from aorpisc.io import exporters  # noqa: E402
 
 st.set_page_config(page_title="AoR / PISC toolkit", page_icon="*",
                    layout="wide", initial_sidebar_state="expanded")
+
+
+# --------------------------------------------------------------------------
+# Streamlit moved on: `use_container_width` became `width=`, and
+# `st.components.v1.html` became `st.iframe`, which takes a source rather than
+# a string. Both old spellings still work but warn on every rerun, which
+# buries real messages in the app's log. These two helpers use whichever API
+# the installed version has, so the package keeps its loose Streamlit floor.
+_FULL_WIDTH = ({"width": "stretch"}
+               if "width" in inspect.signature(st.button).parameters
+               else {"use_container_width": True})
+
+
+def _embed_html(html: str, height: int = 640) -> None:
+    """Put a self-contained HTML document (the folium map) in the page.
+
+    Folium sizes its map div at ``height: 100%``, which needs a parent of
+    known height. ``st.iframe`` sizes itself to its content, so 100% collapses
+    and Leaflet computes its ``fitBounds`` against a container of no height --
+    the map comes up zoomed out to the whole world. The embedded copy
+    therefore gets an explicit pixel height; the string handed to the download
+    button is left alone so the standalone file still fills its window.
+    """
+    if hasattr(st, "iframe"):
+        doc = html.replace(
+            "</head>",
+            f"<style>html,body{{height:{height}px;overflow:hidden}}</style></head>",
+            1)
+        d = st.session_state.get("_embed_dir")
+        if d is None:
+            d = st.session_state["_embed_dir"] = tempfile.mkdtemp(prefix="aorpisc-")
+        path = pathlib.Path(d) / (
+            hashlib.sha1(doc.encode("utf-8")).hexdigest()[:16] + ".html")
+        if not path.exists():
+            path.write_text(doc, encoding="utf-8")
+            # keep the session's scratch directory from growing without bound
+            kept = sorted(pathlib.Path(d).glob("*.html"),
+                          key=lambda q: q.stat().st_mtime, reverse=True)
+            for stale in kept[6:]:
+                stale.unlink(missing_ok=True)
+        st.iframe(path, height=height)
+    else:                                     # Streamlit without st.iframe
+        import streamlit.components.v1 as components
+
+        components.html(html, height=height, scrolling=False)
+
 
 EXAMPLES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                         "examples")
@@ -140,8 +190,7 @@ def _well_editor() -> list[dict]:
         {"name": "INJ-2", "latitude": 31.9686, "longitude": -99.8890,
          "rate": 0.5, "start_year": 0.0, "stop_year": 20.0},
     ]
-    edited = st.data_editor(default, num_rows="dynamic", key="wells",
-                            use_container_width=True)
+    edited = st.data_editor(default, num_rows="dynamic", key="wells")
     return [dict(r, kind="injector") for r in edited if r.get("name")]
 
 
@@ -189,7 +238,7 @@ with col_a:
                                "probabilistic AoR")
     n_real = st.number_input("realisations", 40, 1000, 150, 10,
                              disabled=not run_unc)
-    go = st.button("Run", type="primary", use_container_width=True)
+    go = st.button("Run", type="primary", **_FULL_WIDTH)
 with col_b:
     st.json(project.summary(), expanded=False)
 
@@ -256,7 +305,7 @@ with tabs[0]:
             res.aor, x=res.x, y=res.y, dp_field=res.dp_fields.max(axis=0),
             wells=project.wells,
             penetrations=(res.corrective.wells if res.corrective else None))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig)
     except ImportError:
         st.pyplot(viz.aor_map(res.aor, x=res.x, y=res.y,
                               dp_field=res.dp_fields.max(axis=0),
@@ -276,14 +325,11 @@ with tabs[0]:
         st.write(f"**AoR extent by azimuth from {inj[0].name}**")
         st.dataframe(
             [{"azimuth (deg)": k, "distance (ft)": U.length_out(v, "ft"),
-              "distance (mi)": U.length_out(v, "mi")} for k, v in az.items()],
-            use_container_width=True, hide_index=True)
+              "distance (mi)": U.length_out(v, "mi")} for k, v in az.items()], hide_index=True)
 
 # ---------------------------------------------------------------- GIS map
 with tabs[1]:
     try:
-        import streamlit.components.v1 as components
-
         from aorpisc import gis
 
         ctx = gis.MapContext.from_project(project)
@@ -294,7 +340,7 @@ with tabs[1]:
         html = gis.map_html(res.aor, ctx, wells=project.wells,
                             penetrations=res.corrective, basemap=base,
                             title=f"{project.name} - Area of Review")
-        components.html(html, height=640, scrolling=False)
+        _embed_html(html, height=640)
         st.download_button("Download this map as a standalone HTML file", html,
                            "aor_map.html", "text/html")
         st.caption("The downloaded file opens offline in any browser, with the "
@@ -309,8 +355,7 @@ with tabs[1]:
 # -------------------------------------------------------------- threshold
 with tabs[2]:
     st.pyplot(viz.threshold_comparison(res.thresholds, res.selected_threshold))
-    st.dataframe([t.summary() for t in res.thresholds],
-                 use_container_width=True, hide_index=True)
+    st.dataframe([t.summary() for t in res.thresholds], hide_index=True)
     st.info("The threshold pressure is the largest single discretionary lever "
             "in an AoR delineation. A method that does not apply to the site's "
             "pressure regime is drawn hatched and is excluded from the "
@@ -322,12 +367,12 @@ with tabs[3]:
         st.info("No PISC analysis for this run.")
     else:
         try:
-            st.plotly_chart(viz.plotly_pisc(res.pisc), use_container_width=True)
+            st.plotly_chart(viz.plotly_pisc(res.pisc))
         except ImportError:
             st.pyplot(viz.pisc_panels(res.pisc))
         st.write("**Recommendation**")
         st.write(s["pisc"]["recommended_pisc"]["verdict"])
-        st.dataframe(res.pisc.table(), use_container_width=True, hide_index=True)
+        st.dataframe(res.pisc.table(), hide_index=True)
         if res.pisc.directional:
             st.pyplot(viz.migration_rose(res.pisc.directional))
         st.write("**40 CFR 146.93(c) demonstration checklist**")
@@ -337,8 +382,7 @@ with tabs[3]:
             conduits_identified=bool(res.corrective),
             sensitivity_analysis_done=bool(res.uncertainty),
             usdw_separation=(project.injection_zone.top_depth
-                             - project.usdw.base_depth)),
-            use_container_width=True, hide_index=True)
+                             - project.usdw.base_depth)), hide_index=True)
 
 # ----------------------------------------------------- corrective action
 with tabs[4]:
@@ -375,14 +419,14 @@ with tabs[4]:
                 threshold_pressure=res.selected_threshold.delta_p_critical)
             res.corrective = plan
             st.json(plan.summary())
-            st.dataframe(plan.table(), use_container_width=True, hide_index=True)
+            st.dataframe(plan.table(), hide_index=True)
             st.write("**Phased corrective action by modelled arrival time**")
             st.json(plan.phases())
         finally:
             os.unlink(tmp)
     elif res.corrective:
         st.json(res.corrective.summary())
-        st.dataframe(res.corrective.table(), use_container_width=True,
+        st.dataframe(res.corrective.table(),
                      hide_index=True)
         st.json(res.corrective.phases())
     else:
@@ -406,8 +450,7 @@ with tabs[5]:
         with c2:
             st.pyplot(viz.probabilistic_aor_map(mc, wells=project.wells))
         st.write("**Rank correlation with AoR area**")
-        st.dataframe(mc.correlations("aor_area_acres"),
-                     use_container_width=True, hide_index=True)
+        st.dataframe(mc.correlations("aor_area_acres"), hide_index=True)
         st.json({"percentiles (acres)": mc.percentiles("aor_area_acres"),
                  "ratio to the ensemble base case":
                      unc.get("percentile_ratio_to_base", {})})

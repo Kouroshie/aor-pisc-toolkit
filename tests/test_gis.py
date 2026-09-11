@@ -339,3 +339,20 @@ def test_static_and_plotly_maps_also_dash_a_coincident_aor():
     aor_traces = [t for t in pf.data if "AoR" in (t.name or "")]
     assert aor_traces and aor_traces[0].line.dash == "dash"
     assert "on the plume" in aor_traces[0].name
+
+
+@pytest.mark.skipif(not gis.HAVE_FOLIUM, reason="folium not installed")
+def test_map_refits_itself_once_the_host_has_laid_out():
+    """Leaflet sizes from its container, which a host may not have sized yet.
+
+    An iframe that sizes to its content, a tab that starts hidden, a print
+    stylesheet: any of them can leave the container at zero height when the
+    script runs, and the map then opens zoomed out to the whole world with no
+    error reported anywhere. The document re-measures and re-fits on load.
+    """
+    ctx = gis.MapContext.from_project(_project())
+    html = gis.map_html(_disc(radius_m=1800.0), ctx)
+    assert "invalidateSize()" in html
+    assert "fitBounds(" in html
+    assert 'addEventListener("load"' in html
+    assert 'addEventListener("resize"' in html
