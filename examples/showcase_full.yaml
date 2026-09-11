@@ -1,0 +1,182 @@
+# ---------------------------------------------------------------------------
+# Coastal Bend Storage Hub - the example that exercises the whole toolkit
+#
+# This project is built to put every part of Containment to work in one run:
+#
+#   * two stacked injection zones, each with its own confining interval, its
+#     own pressure regime and therefore its own threshold pressure;
+#   * a sealing fault that sets the AoR boundary on one side;
+#   * four CO2 injectors on calendar-date schedules, one of them stepped, each
+#     with a declared bottomhole-pressure limit;
+#   * a brine extractor for pressure management;
+#   * a georeferenced frame, so the GIS map and every export land in the right
+#     place on the ground;
+#   * a list of artificial penetrations to screen for corrective action;
+#   * a 100-year horizon, so post-injection migration and PISC mean something;
+#   * uncertainty, for the tornado, the Monte Carlo and the probabilistic AoR.
+#
+# Everything here is invented. It is a realistic Texas Gulf Coast shape, not
+# any real project's data, and it is not a benchmark.
+# ---------------------------------------------------------------------------
+
+project:
+  name: Coastal Bend Storage Hub (worked example)
+  operator: Worked Example Storage LLC
+  permit: pending
+  datum: ground surface, depths positive downward
+  start_date: 2027-01-01       # model time is measured from here
+  crs:
+    epsg: 32615                # UTM zone 15N
+    x_offset: 408000.0
+    y_offset: 3320000.0
+  notes: >
+    Stacked completion in two Frio-equivalent sands through one wellbore per
+    location, with brine extraction for pressure management and a sealing
+    fault to the northeast. Threshold pressure is left on auto so every
+    method is computed and the most protective applicable one is chosen.
+
+units:
+  length: ft
+  depth: ft
+  pressure: psi
+  temperature: F
+  permeability: mD
+  rate: MMT/yr
+  brine_rate: bbl/day
+  time: yr
+  compressibility: 1/psi
+
+formation:
+  injection_zones:
+    - name: Frio Upper
+      top_depth: 5200
+      thickness: 180
+      porosity: 0.22
+      permeability: 280
+      temperature: 142
+      salinity_ppm: 68000
+      initial_pressure: 2180   # under-pressurised for its depth
+      rock_compressibility: 6.0e-6
+      dip_degrees: 0.8
+      dip_azimuth: 135         # dips southeast, so CO2 migrates northwest
+      confining_zone:
+        top_depth: 4900
+        base_depth: 5200       # 300 ft of shale
+
+    - name: Frio Lower
+      top_depth: 6000
+      thickness: 300
+      porosity: 0.24
+      permeability: 350
+      temperature: 155
+      salinity_ppm: 75000
+      initial_pressure: 2481
+      rock_compressibility: 6.0e-6
+      dip_degrees: 0.8
+      dip_azimuth: 135
+      confining_zone:
+        top_depth: 5600
+        base_depth: 6000       # 400 ft of shale
+
+  usdw:
+    base_depth: 1050
+    initial_pressure: 455      # hydrostatic
+    temperature: 82
+    salinity_ppm: 1200
+
+relative_permeability:
+  model: brooks_corey
+  swr: 0.30
+  sgr: 0.25                    # strong residual trapping in a clean sand
+  krw0: 1.0
+  krg0: 0.35
+  m: 3.0
+  n: 3.0
+
+threshold:
+  # auto computes every method, discards those that do not apply to this
+  # pressure regime, and takes the most protective survivor. The report shows
+  # all of them so the choice can be argued.
+  method: auto
+  mud_weight_ppg: 9.0
+  gel_strength: 10
+
+faults:
+  - name: Bend Fault
+    multiplier: 0.0            # fully sealing
+    latlon:
+      - [30.012, -94.098]
+      - [29.975, -94.086]
+
+wells:
+  # No `zone` named, so each well is a commingled completion open to both
+  # sands and its rate is split between them in proportion to k*h.
+  - name: INJ-A1
+    latitude: 29.98
+    longitude: -94.13
+    rate: 0.9
+    start_date: 2027-01-01
+    stop_date: 2052-01-01
+    max_bhp: 3100
+
+  - name: INJ-A2
+    latitude: 29.982475
+    longitude: -94.113577
+    rate: 0.9
+    start_date: 2029-01-01
+    stop_date: 2052-01-01
+    max_bhp: 3100
+
+  - name: INJ-B1
+    latitude: 29.996773
+    longitude: -94.12242
+    max_bhp: 3100
+    # a stepped schedule: ramps up, then throttles back late in life
+    schedule:
+      - {year: 4,  rate: 0.5}
+      - {year: 8,  rate: 1.1}
+      - {year: 20, rate: 0.6}
+      - {year: 25, rate: 0.0}
+
+  - name: INJ-B2
+    latitude: 29.994848
+    longitude: -94.105996
+    rate: 0.8
+    start_date: 2033-01-01
+    stop_date: 2052-01-01
+    max_bhp: 3100
+
+  - name: EXT-1
+    latitude: 29.988524
+    longitude: -94.117682
+    kind: extractor
+    rate: 9000                 # bbl/day of brine, for pressure management
+    start_date: 2031-01-01
+    stop_date: 2052-01-01
+
+model:
+  engine: ve
+  grid:
+    cell_size: 500             # ft, over the well field
+    fine_half_width: 18000     # ft
+    half_width: 85000          # ft, about 16 mi to the domain edge
+    growth: 1.12
+  boundary: constant_pressure  # a laterally extensive Gulf Coast sand
+  end_year: 100                # 25 yr injection + 75 yr post-injection
+  aor_reevaluation_years: 5    # 40 CFR 146.84(e)
+
+plume:
+  cutoff: 0.02
+  criterion: column-averaged CO2 saturation >= 0.02
+
+penetrations:
+  # Latitude/longitude, which is how well lists actually arrive from RRC,
+  # TWDB and commercial databases. Depths stay in coordinate_unit.
+  csv: examples/gulf_coast_wells.csv
+  coordinate_unit: ft
+
+uncertainty:
+  enabled: true
+  realisations: 120
+  spread: 0.5
+  seed: 42
