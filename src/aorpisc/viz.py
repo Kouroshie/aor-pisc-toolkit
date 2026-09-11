@@ -756,12 +756,22 @@ def plotly_aor_map(result, x=None, y=None, dp_field=None, wells=None,
 
     if wells:
         inj = [w for w in wells if getattr(w, "kind", "injector") == "injector"]
+        # fan the labels radially so a tight well row does not overprint itself
+        cx0 = np.mean([w.x for w in inj]) if inj else 0.0
+        cy0 = np.mean([w.y for w in inj]) if inj else 0.0
+        pos = []
+        for k, w in enumerate(inj):
+            dx, dy = w.x - cx0, w.y - cy0
+            if abs(dx) < 1e-9 and abs(dy) < 1e-9:
+                dx, dy = (1.0, 1.0) if k % 2 == 0 else (-1.0, -1.0)
+            pos.append(("top " if dy >= 0 else "bottom ")
+                       + ("right" if dx >= 0 else "left"))
         fig.add_trace(go.Scatter(
             x=[w.x * scale for w in inj], y=[w.y * scale for w in inj],
             mode="markers+text", name="injector",
             marker=dict(symbol="triangle-down", size=13, color=p["ink"],
                         line=dict(color=p["surface"], width=2)),
-            text=[w.name for w in inj], textposition="top right",
+            text=[w.name for w in inj], textposition=pos,
             textfont=dict(size=10, color=p["ink"])))
     if penetrations:
         colours = {"corrective action": p["critical"], "field testing": p["warning"],
@@ -778,12 +788,21 @@ def plotly_aor_map(result, x=None, y=None, dp_field=None, wells=None,
                 customdata=[[w.name, w.action_reason] for w in sel],
                 hovertemplate="%{customdata[0]}<br>%{customdata[1]}<extra></extra>"))
 
+    # frame on the AoR, not on the whole model domain
+    focus = result.aor if (result.aor is not None and not result.aor.is_empty)         else result.plume
+    xr = yr = None
+    if focus is not None and not focus.is_empty:
+        x0, y0, x1, y1 = (v * scale for v in focus.bounds)
+        half = 0.5 * max(x1 - x0, y1 - y0) * 1.35
+        cx, cy = 0.5 * (x0 + x1), 0.5 * (y0 + y1)
+        xr, yr = [cx - half, cx + half], [cy - half, cy + half]
+
     fig.update_layout(
         template="plotly_white" if theme == "light" else "plotly_dark",
         paper_bgcolor=p["surface"], plot_bgcolor=p["surface"],
-        xaxis_title=f"easting ({length_unit})",
-        yaxis_title=f"northing ({length_unit})",
-        yaxis=dict(scaleanchor="x", scaleratio=1),
+        xaxis=dict(title=f"easting ({length_unit})", range=xr),
+        yaxis=dict(title=f"northing ({length_unit})", range=yr,
+                   scaleanchor="x", scaleratio=1),
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
         margin=dict(l=60, r=20, t=60, b=50), height=650)
     return fig

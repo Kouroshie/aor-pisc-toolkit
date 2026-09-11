@@ -122,8 +122,19 @@ threshold:
   mud_weight_ppg: 9.0
   gel_strength: 10       # in the project pressure unit
   mud_datum_depth: 6000  # optional; defaults to the injection-zone mid-depth
+  datum: top             # where dP_c is evaluated: `top` or a depth below
+  datum_depth: 5862      # optional explicit depth, overrides `datum`
   override: 313          # optional; skips all methods and uses this dP_c
 ```
+
+**`datum` is not cosmetic.** The threshold pressure is evaluated at a depth,
+and the default here is the mid-point of the injection zone. Many published
+applications quote it at the **top** of the injection zone instead, which is
+where the topmost perforation and the shallowest conduit connection are.
+Moving the datum across a 313 ft interval changes `dP_c` by the weight of
+157 ft of brine; on one published Texas site that is 714 psi at the top
+versus 790 psi at mid-perforation, a 10 % difference in the number that sets
+the whole pressure front. Set it explicitly and say which you used.
 
 `auto` runs every method and selects the smallest `dP_c` that is applicable to
 the site's pressure regime, which gives the largest pressure front and the

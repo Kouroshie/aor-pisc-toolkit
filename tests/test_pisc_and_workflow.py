@@ -315,3 +315,41 @@ def test_end_to_end_analytical_run():
     # the cross-checks must bracket the modelled plume
     ck = res.analytical_checks
     assert ck["volumetric_radius_ft"] < ck["nordbotten_celia_radius_ft"]
+
+
+def test_threshold_datum_is_configurable():
+    """The datum the threshold is evaluated at is a real, documented choice.
+
+    Moving it from the mid-point of a thick injection zone to the top changes
+    dP_c by the weight of half the interval, which on an under-pressurised
+    site is easily 10 % of the answer.
+    """
+    base = {
+        "units": {"depth": "ft", "length": "ft", "pressure": "psi",
+                  "temperature": "F", "rate": "MMT/yr"},
+        "formation": {
+            "injection_zone": {"top_depth": 5862, "thickness": 313.5,
+                               "porosity": 0.10, "permeability": 50,
+                               "temperature": 100, "salinity_ppm": 180153,
+                               "initial_pressure": 1817},
+            "usdw": {"base_depth": 1217, "initial_pressure": 289,
+                     "temperature": 80, "salinity_ppm": 1500},
+        },
+        "wells": [{"name": "I", "x": 0, "y": 0, "rate": 0.7,
+                   "start_year": 0, "stop_year": 3}],
+        "threshold": {"method": "method1"},
+    }
+    mid = Project.from_dict(base)
+    top = Project.from_dict({**base, "threshold": {"method": "method1", "datum": "top"}})
+    exp = Project.from_dict({**base,
+                             "threshold": {"method": "method1", "datum_depth": 5862}})
+
+    assert U.length_out(mid.threshold_depth, "ft") == pytest.approx(6018.75)
+    assert U.length_out(top.threshold_depth, "ft") == pytest.approx(5862.0)
+    assert U.length_out(exp.threshold_depth, "ft") == pytest.approx(5862.0)
+
+    from aorpisc import workflow
+    dp_mid = workflow.run(mid).selected_threshold.delta_p_psi
+    dp_top = workflow.run(top).selected_threshold.delta_p_psi
+    assert dp_mid > dp_top
+    assert (dp_mid - dp_top) / dp_top > 0.05      # a material difference

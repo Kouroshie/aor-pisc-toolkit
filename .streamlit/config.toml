@@ -1,0 +1,14 @@
+# Theme for the hosted app. The palette matches aorpisc.viz so figures rendered
+# in the page sit on the same surface colour as the page itself.
+[theme]
+base = "light"
+primaryColor = "#2a78d6"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f2f1ee"
+textColor = "#0b0b0b"
+
+[server]
+maxUploadSize = 50
+
+[browser]
+gatherUsageStats = false

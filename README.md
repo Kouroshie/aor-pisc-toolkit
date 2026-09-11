@@ -271,6 +271,27 @@ See [`docs/validation.md`](docs/validation.md).
 
 ---
 
+## Running it in a browser, hosted
+
+The repository is ready to deploy to [Streamlit Community
+Cloud](https://share.streamlit.io) (free), which gives anyone a URL and
+requires no Python install on their side:
+
+1. sign in at <https://share.streamlit.io> with the GitHub account that owns
+   this repository;
+2. **Create app** -> **Deploy a public app from GitHub**;
+3. repository `Kouroshie/aor-pisc-toolkit`, branch `main`, main file path
+   `app/streamlit_app.py`;
+4. **Deploy**.
+
+`requirements.txt` and `.streamlit/config.toml` at the repository root are
+there for exactly this. The app adds `src/` to `sys.path` itself, so the
+package does not need to be pip-installed in the hosted environment. Pushing
+to `main` redeploys automatically.
+
+Hugging Face Spaces (Streamlit SDK) works from the same two files if you would
+rather host there.
+
 ## Performance
 
 The analytical engine is seconds. The vertical-equilibrium solver is seconds

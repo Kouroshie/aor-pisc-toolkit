@@ -137,6 +137,7 @@ class Project:
     mud_weight_ppg: float = 9.0
     gel_strength: float = U.pressure(10.0, "psi")
     mud_datum_depth: float = float("nan")
+    threshold_datum_depth: float = float("nan")  # m; where dP_c is evaluated
     threshold_override: float = float("nan")   # Pa
 
     engine: str = "analytical"       # analytical | ve | import
@@ -233,6 +234,10 @@ class Project:
         p.gel_strength = U.pressure(float(th.get("gel_strength", 10.0)), un.pressure)
         if th.get("mud_datum_depth") is not None:
             p.mud_datum_depth = U.length(float(th["mud_datum_depth"]), un.depth)
+        if th.get("datum_depth") is not None:
+            p.threshold_datum_depth = U.length(float(th["datum_depth"]), un.depth)
+        elif th.get("datum") in ("top", "top_of_injection_zone"):
+            p.threshold_datum_depth = p.injection_zone.top_depth
         if th.get("override") is not None:
             p.threshold_override = U.pressure(float(th["override"]), un.pressure)
 
@@ -342,6 +347,23 @@ class Project:
                 else U.compressibility(4e-6, "1/psi"))
         return rock + fs.c_brine
 
+    @property
+    def threshold_depth(self) -> float:
+        """Depth at which the threshold pressure is evaluated.
+
+        Defaults to the mid-point of the injection zone.  Applications
+        commonly quote it at the **top** of the injection zone instead, which
+        is where the topmost perforation and the shallowest possible conduit
+        connection are.  The difference is not cosmetic: moving the datum from
+        the mid-perforation to the top of a 300 ft interval changes dP_c by
+        the weight of 150 ft of brine, which on a typical under-pressurised
+        site is 10 % or more of the answer.  Set ``threshold.datum_depth``
+        (or ``threshold.datum: top``) to control it, and state the choice.
+        """
+        return (self.threshold_datum_depth
+                if np.isfinite(self.threshold_datum_depth)
+                else self.injection_zone.mid_depth)
+
     def injection_end(self) -> float:
         return max((w.stop_time() for w in self.wells if w.kind == "injector"),
                    default=0.0)
@@ -366,6 +388,7 @@ class Project:
             "injection_zone_permeability_mD": U.permeability_out(iz.permeability, "mD"),
             "injection_zone_porosity": iz.porosity,
             "usdw_base_ft": U.length_out(self.usdw.base_depth, "ft"),
+            "threshold_datum_ft": U.length_out(self.threshold_depth, "ft"),
             "engine": self.engine,
             "plume_criterion": self.plume_criterion,
             "warnings": list(self.warnings),

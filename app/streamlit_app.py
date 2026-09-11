@@ -36,7 +36,8 @@ EXAMPLES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 
 # ==========================================================================
 def _num(label, value, unit, **kw):
-    return st.number_input(f"{label} ({unit})", value=float(value), **kw)
+    """Sidebar number input, labelled with its unit."""
+    return st.sidebar.number_input(f"{label} ({unit})", value=float(value), **kw)
 
 
 def _project_from_form() -> dict:

@@ -279,7 +279,7 @@ def run(p: Project, *, penetrations: list | None = None,
                 else fluids.hydrostatic_pressure(p.usdw.base_depth)),
         p_inj=p.injection_zone.initial_pressure,
         depth_usdw=p.usdw.base_depth,
-        depth_inj=p.injection_zone.mid_depth,
+        depth_inj=p.threshold_depth,
         temperature_inj=p.injection_zone.temperature,
         temperature_usdw=(p.usdw.temperature if np.isfinite(p.usdw.temperature)
                           else U.temperature(70, "F")),

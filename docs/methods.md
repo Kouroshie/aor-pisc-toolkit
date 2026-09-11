@@ -180,6 +180,21 @@ inapplicable** when that difference is not positive, because the remaining two
 routes - numerical wellbore-leakage modelling and a USDW dilution
 demonstration - are outside what a closed form can supply.
 
+### Where the threshold is evaluated
+
+`dP_c` is a function of depth, and the depth is a choice. The toolkit defaults
+to the mid-point of the injection zone; `threshold.datum: top` evaluates it at
+the top of the interval, and `threshold.datum_depth` takes an explicit depth.
+
+The difference is the weight of the brine column between the two datums. On a
+313 ft injection interval that is roughly 157 ft of brine, about 75 psi, which
+on a 714 psi threshold is more than 10 %. Two further percent comes from the
+brine-density correlation: Rowe & Chou (1970) and Batzle & Wang (1992) differ
+by ~1.4 % in density at 180,000 ppm, and because `dP_c` is a small difference
+between two large numbers (`P_u + rho g dz - P_i`), a 1.4 % density change
+moves the answer by 4 %. State the datum and the correlation alongside the
+number.
+
 ### Choosing
 
 `compare_methods()` runs all of them; `recommended()` returns the smallest
