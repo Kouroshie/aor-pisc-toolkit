@@ -267,3 +267,75 @@ def test_a_fault_with_one_point_is_reported_not_silently_dropped():
     p = _project(faults=[{"name": "stub", "points": [[0, 0]]}])
     assert p.faults == []
     assert any("at least two points" in w for w in p.warnings)
+
+
+# ==========================================================================
+def _nested():
+    """An AoR whose pressure front sits wholly inside its plume.
+
+    This is the common case, not an edge case: EPA expects the separate-phase
+    plume to run past the pressure front at many sites, and then the union
+    *is* the plume and the two boundaries are the same line.
+    """
+    from shapely.geometry import Point
+
+    plume = Point(0, 0).buffer(1500.0)
+    front = Point(0, 0).buffer(600.0)
+    return delineate.AoRResult(plume=plume, pressure_front=front,
+                               aor=plume.union(front), threshold_pressure=1.1e6,
+                               plume_criterion="test")
+
+
+def test_a_contained_component_makes_the_aor_coincident():
+    r = _nested()
+    assert r.coincident_with() == "plume"
+    assert r.aor.equals(r.plume)
+
+
+def test_a_genuine_union_is_not_coincident():
+    from shapely.geometry import Point
+
+    a = Point(-900, 0).buffer(1500.0)
+    b = Point(900, 0).buffer(1500.0)
+    r = delineate.AoRResult(plume=a, pressure_front=b, aor=a.union(b),
+                            threshold_pressure=1.1e6)
+    assert r.coincident_with() == ""
+
+
+@pytest.mark.skipif(not gis.HAVE_FOLIUM, reason="folium not installed")
+def test_map_does_not_paint_out_a_coincident_component():
+    """The AoR must not hide the component it is drawn on top of.
+
+    Drawn solid and last, the AoR boundary covers an identical plume boundary
+    completely and the reader cannot tell whether the plume is missing, empty
+    or underneath. It is dashed instead, and the legend says why.
+    """
+    ctx = gis.MapContext.from_project(_project())
+    html = gis.map_html(_nested(), ctx)
+    assert "dashArray" in html and "14,9" in html
+    assert "coincides with the plume" in html
+    assert "leave that line visible" in html
+
+    # a genuine union keeps the solid boundary
+    from shapely.geometry import Point
+
+    a, b = Point(-900, 0).buffer(1500.0), Point(900, 0).buffer(1500.0)
+    union = delineate.AoRResult(plume=a, pressure_front=b, aor=a.union(b),
+                                threshold_pressure=1.1e6)
+    solid = gis.map_html(union, ctx)
+    assert "14,9" not in solid
+    assert "coincides with" not in solid
+
+
+def test_static_and_plotly_maps_also_dash_a_coincident_aor():
+    from aorpisc import viz
+
+    r = _nested()
+    fig = viz.aor_map(r)
+    labels = [t.get_label() for a in fig.axes for t in a.patches]
+    assert any("on the plume" in str(s) for s in labels), labels
+
+    pf = viz.plotly_aor_map(r)
+    aor_traces = [t for t in pf.data if "AoR" in (t.name or "")]
+    assert aor_traces and aor_traces[0].line.dash == "dash"
+    assert "on the plume" in aor_traces[0].name

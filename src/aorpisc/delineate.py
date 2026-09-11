@@ -196,6 +196,31 @@ class AoRResult:
                 f"outside the plume, plume adds "
                 f"{U.area_out(extra_plume, 'acres'):,.0f} acres outside the front")
 
+    def coincident_with(self, tol: float = 1e-9) -> str:
+        """Which component the AoR boundary is drawn exactly on top of.
+
+        Returns ``"plume"``, ``"pressure front"``, ``"both"`` or ``""``.
+
+        The AoR is a union, so whenever one component contains the other the
+        union *is* that component and the two boundaries are the same line. A
+        map that draws the AoR over a coincident component hides it completely,
+        and the reader cannot tell whether the component is missing, empty or
+        underneath. Drawing code uses this to get out of its own way.
+        """
+        if self.aor is None or self.aor.is_empty:
+            return ""
+        a = self.area_m2
+        hits = []
+        for name, geom in (("plume", self.plume),
+                           ("pressure front", self.pressure_front)):
+            if geom is None or geom.is_empty:
+                continue
+            if self.aor.symmetric_difference(geom).area <= tol * max(a, 1.0):
+                hits.append(name)
+        if len(hits) == 2:
+            return "both"
+        return hits[0] if hits else ""
+
     def max_radius_from(self, x: float, y: float) -> float:
         """Greatest distance (m) from a point to the AoR boundary."""
         if self.aor is None or self.aor.is_empty:

@@ -162,9 +162,11 @@ def _bounds(ctx: MapContext, *geoms):
 
 
 def _legend_html(result, plan, ctx: MapContext, title: str) -> str:
+    coincident = result.coincident_with()
     rows = [
-        ("#0b0b0b", "solid", f"AoR &mdash; {result.area_acres:,.0f} acres "
-                             f"({result.area_sq_mi:,.2f} sq mi)"),
+        ("#0b0b0b", "dashed" if coincident else "solid",
+         f"AoR &mdash; {result.area_acres:,.0f} acres "
+         f"({result.area_sq_mi:,.2f} sq mi)"),
         ("#eb6834", "solid", f"CO2 plume ({result.plume_criterion or 'modelled extent'})"),
         ("#2a78d6", "solid", f"Pressure front (dP &ge; "
                              f"{U.pressure_out(result.threshold_pressure, 'psi'):,.0f} psi)"),
@@ -174,6 +176,12 @@ def _legend_html(result, plan, ctx: MapContext, title: str) -> str:
         f"border-top:3px {st} {c};vertical-align:middle'></span>"
         f"<span style='margin-left:8px'>{lab}</span></div>"
         for c, st, lab in rows)
+    if coincident:
+        what = ("the CO2 plume and the pressure front" if coincident == "both"
+                else f"the {coincident}")
+        items += (f"<div style='margin:5px 0 0;color:#8a8983;font-size:11px'>"
+                  f"The AoR boundary lies exactly on {what}, so it is dashed "
+                  f"here to leave that line visible.</div>")
     if plan is not None:
         counts = {}
         for w in plan.inside:
@@ -251,13 +259,26 @@ def build_map(result, ctx: MapContext, *, wells=None, penetrations=None,
                              if not result.plume.is_empty else None)
     g_plume.add_to(m)
 
+    # The AoR is a union, so when one component contains the other the union
+    # *is* that component and the two boundaries are the same line. Drawn
+    # solid and on top, the AoR would paint over the component underneath and
+    # the reader could not tell whether that component was missing, empty or
+    # hidden. Dashes let the colour beneath show through the gaps.
+    coincident = result.coincident_with()
+    aor_style = dict(STYLE["aor"])
+    if coincident:
+        aor_style["dashArray"] = "14,9"
+    aor_note = (f"<br>boundary coincides with the {coincident}"
+                if coincident and coincident != "both" else
+                "<br>boundary coincides with both components" if coincident else "")
     g_aor = folium.FeatureGroup(name="Area of Review", show=True)
-    _add_geometry(g_aor, result.aor, ctx, STYLE["aor"],
+    _add_geometry(g_aor, result.aor, ctx, aor_style,
                   tooltip=f"AoR - {result.area_acres:,.0f} acres",
                   popup_html=(f"<b>Area of Review</b><br>"
                               f"{result.area_acres:,.0f} acres "
                               f"({result.area_sq_mi:,.2f} sq mi)<br>"
-                              f"controlled by: {result.controlling_component()}<br>"
+                              f"controlled by: {result.controlling_component()}"
+                              f"{aor_note}<br>"
                               f"<span style='color:#8a8983'>{result.method}</span>"))
     g_aor.add_to(m)
 

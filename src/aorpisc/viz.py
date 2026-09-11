@@ -209,10 +209,16 @@ def aor_map(result, *, x=None, y=None, dp_field=None, threshold=None,
                    edgecolor=p["series"][PLUME_COLOR], lw=2.2, zorder=3,
                    label=f"CO2 plume ({result.plume_criterion})")
     if result.aor is not None and not result.aor.is_empty:
+        # When one component contains the other, the union is that component
+        # and the two boundaries are the same line. A solid AoR drawn on top
+        # would erase it, so dash the AoR and say so in the legend.
+        coincident = result.coincident_with()
         _draw_geom(ax, scaled(result.aor), facecolor=None, edgecolor=p["ink"],
                    lw=2.4, zorder=5,
+                   ls=(0, (7, 4)) if coincident else "-",
                    label=f"AoR - {result.area_acres:,.0f} acres "
-                         f"({result.area_sq_mi:,.1f} sq mi)")
+                         f"({result.area_sq_mi:,.1f} sq mi)"
+                         + (f", on the {coincident}" if coincident else ""))
 
     if wells:
         wx = [w.x * scale for w in wells if getattr(w, "kind", "injector") == "injector"]
@@ -735,13 +741,13 @@ def plotly_aor_map(result, x=None, y=None, dp_field=None, wells=None,
             colorbar=dict(title="max dP (psi)", thickness=14),
             hovertemplate="dP %{z:,.0f} psi<extra></extra>", zsmooth="best"))
 
-    def add(geom, name, colour, fill, width):
+    def add(geom, name, colour, fill, width, dash=None):
         first = True
         for gpoly in _polys(geom):
             xy = np.asarray(gpoly.exterior.coords) * scale
             fig.add_trace(go.Scatter(
                 x=xy[:, 0], y=xy[:, 1], mode="lines", name=name,
-                line=dict(color=colour, width=width),
+                line=dict(color=colour, width=width, dash=dash),
                 fill="toself" if fill else None,
                 fillcolor=fill, legendgroup=name, showlegend=first,
                 hovertemplate=f"{name}<extra></extra>"))
@@ -752,7 +758,13 @@ def plotly_aor_map(result, x=None, y=None, dp_field=None, wells=None,
         p["series"][PRESSURE_COLOR], "rgba(42,120,214,0.16)", 2)
     add(result.plume, f"CO2 plume ({result.plume_criterion})",
         p["series"][PLUME_COLOR], "rgba(235,104,52,0.26)", 2)
-    add(result.aor, f"AoR - {result.area_acres:,.0f} acres", p["ink"], None, 3)
+    # a union that equals one of its components shares that component's
+    # boundary, so dash the AoR rather than painting the component out
+    coincident = result.coincident_with()
+    add(result.aor,
+        f"AoR - {result.area_acres:,.0f} acres"
+        + (f", on the {coincident}" if coincident else ""),
+        p["ink"], None, 3, dash="dash" if coincident else None)
 
     if wells:
         inj = [w for w in wells if getattr(w, "kind", "injector") == "injector"]

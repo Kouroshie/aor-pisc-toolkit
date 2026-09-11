@@ -590,3 +590,24 @@ Results carry warnings rather than assuming the user will notice:
 * Spycher, N., Pruess, K. & Ennis-King, J. (2003) *Geochim. Cosmochim. Acta* **67**, 3015-3031.
 * Thornhill, J.T. et al. (1982), as cited in EPA 816-R-13-005 Section 3.4.1.
 * USEPA (2013) **816-R-13-005**, *UIC Program Class VI Well Area of Review Evaluation and Corrective Action Guidance*.
+
+
+---
+
+## Reading an AoR map where the boundary coincides with a component
+
+The AoR is a geometric union, so whenever one component contains the other the
+union **is** that component and the two boundaries are the same line. That is
+not a corner case: EPA expects the separate-phase plume to run past the
+pressure front at many sites, and a site whose pressure buildup never reaches
+the threshold has no pressure front at all.
+
+Drawn solid and on top, the AoR boundary paints over the component underneath,
+and a reader cannot tell whether that component is missing, empty, or simply
+hidden. Every map this toolkit draws -- the static figure, the interactive
+figure and the web map -- therefore **dashes the AoR boundary whenever it
+coincides with a component**, and says so in the legend. Where the AoR is a
+genuine union that differs from both components, the boundary stays solid.
+
+`AoRResult.coincident_with()` returns `"plume"`, `"pressure front"`, `"both"`
+or `""`, so a report or a downstream figure can make the same distinction.
