@@ -325,7 +325,11 @@ def build_html(result, *, include_figures: bool = True,
                              for k, v in az.items()])]
 
     # 3b stacked injection zones
-    if result.zones:
+    # getattr, not attribute access: a result may have been built by an older
+    # version of the package and reloaded here (see ProjectResult.summary).
+    zones = getattr(result, "zones", None) or []
+    series = getattr(result, "series", None) or []
+    if zones:
         parts += [
             "<h3>Injection zones</h3>",
             "<p class='cite'>Each zone was delineated separately, with its own "
@@ -333,7 +337,7 @@ def build_html(result, *, include_figures: bool = True,
             "Review above is the geometric union of the zone delineations. The "
             "union is not the sum: stacked zones overlap, and adding the zone "
             "acreages would overstate the AoR.</p>",
-            _rows_table([z.summary() for z in result.zones]),
+            _rows_table([z.summary() for z in zones]),
             "<h3>Rate allocation between zones</h3>",
             _rows_table(p.zone_allocation()),
         ]
@@ -346,8 +350,8 @@ def build_html(result, *, include_figures: bool = True,
             f"{summed - union:,.0f} acres where they overlap."))
 
     # 3c the AoR through time
-    if result.series:
-        rows = delineate.series_growth(result.series)
+    if series:
+        rows = delineate.series_growth(series)
         parts += [
             "<h3>Area of Review at each re-evaluation</h3>",
             "<p class='cite'>40 CFR 146.84(e) - the AoR is re-evaluated at "
@@ -357,7 +361,7 @@ def build_html(result, *, include_figures: bool = True,
             "146.84(e)(2)-(3).</p>",
             _rows_table(rows),
         ]
-        first, last = result.series[0], result.series[-1]
+        first, last = series[0], series[-1]
         parts.append(_callout(
             "note", "AoR growth",
             f"{first.area_acres:,.0f} acres at year {first.year:,.0f}, "

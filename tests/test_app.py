@@ -76,3 +76,24 @@ def test_ticking_stacked_completion_adds_a_zones_panel():
 
     page = " ".join(m.value for m in at.markdown)
     assert "union" in page.lower()
+
+
+@pytest.mark.slow
+def test_a_result_from_an_older_version_still_renders():
+    """A session outlives a deployment.
+
+    The result object lives in session state, so after an update the page can
+    still be holding one built by the previous version of the code, without
+    the attributes added since. That is not hypothetical: it took the live app
+    down with an AttributeError the first time a stacked-zone build shipped.
+    """
+    at = AppTest.from_file(APP, default_timeout=600).run()
+    at.button[0].click().run()
+    stale = at.session_state["result"]
+    for added_later in ("zones", "series"):
+        assert hasattr(stale, added_later)
+        delattr(stale, added_later)          # what an older object looks like
+
+    at.run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert [t.label for t in at.tabs][0] == "AoR map"

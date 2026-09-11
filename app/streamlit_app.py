@@ -395,9 +395,17 @@ else:
     st.success("Domain size, grid resolution, boundary influence, mass balance "
                "and pressure-regime applicability all passed their checks.")
 
+# A result lives in session state, and a session outlives a deployment: after
+# an update the page can still be holding a result built by the previous
+# version of the code, which has none of the attributes added since. Reading
+# those through getattr keeps such a session on the panels it can draw instead
+# of failing the whole page, until the next Run replaces the object.
+zones = getattr(res, "zones", []) or []
+series = getattr(res, "series", []) or []
+
 _labels = ["AoR map", "AoR over time", "GIS map", "Threshold", "PISC",
            "Corrective action", "Uncertainty", "Export", "Help"]
-if res.zones:
+if zones:
     _labels.insert(1, "Zones")          # only earns a panel when there are some
 T = dict(zip(_labels, st.tabs(_labels), strict=True))
 
@@ -437,18 +445,18 @@ with T["AoR map"]:
               "distance (mi)": U.length_out(v, "mi")} for k, v in az.items()], hide_index=True)
 
 # ------------------------------------------------------------ zones
-if res.zones:
+if zones:
     with T["Zones"]:
         theme.lead(guide.LEAD["zones"])
         try:
-            st.plotly_chart(viz.plotly_zone_map(res.zones, res.aor,
+            st.plotly_chart(viz.plotly_zone_map(zones, res.aor,
                                                 wells=project.wells))
         except ImportError:
-            st.pyplot(viz.zone_map(res.zones, res.aor, wells=[
+            st.pyplot(viz.zone_map(zones, res.aor, wells=[
                 w for w in project.wells if w.kind == "injector"]))
 
         st.write("**Each zone on its own terms**")
-        st.dataframe([z.summary() for z in res.zones], hide_index=True)
+        st.dataframe([z.summary() for z in zones], hide_index=True)
         st.caption("Each zone is modelled on its own grid, with CO2 properties "
                    "at its own pressure and temperature and a threshold "
                    "pressure from its own depth. Nothing is averaged across "
@@ -472,28 +480,27 @@ if res.zones:
 # ------------------------------------------------------- AoR over time
 with T["AoR over time"]:
     theme.lead(guide.LEAD["series"])
-    if not res.series:
+    if not series:
         st.info("No time series for this run.")
     else:
         try:
-            st.plotly_chart(viz.plotly_aor_series(res.series, wells=project.wells))
+            st.plotly_chart(viz.plotly_aor_series(series, wells=project.wells))
         except ImportError:
-            st.pyplot(viz.aor_series_map(res.series, wells=[
+            st.pyplot(viz.aor_series_map(series, wells=[
                 w for w in project.wells if w.kind == "injector"]))
 
-        st.pyplot(viz.aor_growth_chart(res.series,
+        st.pyplot(viz.aor_growth_chart(series,
                                        injection_end=project.injection_end()))
 
         st.write("**The re-evaluation ledger**")
-        st.dataframe(delineate.series_growth(res.series), hide_index=True)
+        st.dataframe(delineate.series_growth(series), hide_index=True)
         st.caption("`newly_included_acres` is ground inside the AoR at that "
                    "date that was outside it at the one before. That is "
                    "precisely the area 40 CFR 146.84(e)(2) makes subject to "
                    "artificial-penetration identification and corrective "
                    "action at each re-evaluation.")
 
-        last = res.series[-1]
-        first = res.series[0]
+        last, first = series[-1], series[0]
         st.info(
             f"The AoR grows from {first.area_acres:,.0f} acres at year "
             f"{first.year:,.0f} to {last.area_acres:,.0f} acres at year "

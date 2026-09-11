@@ -137,11 +137,17 @@ class ProjectResult:
             out["ve_solver"] = self.ve.summary()
         if self.uncertainty:
             out["uncertainty"] = self.uncertainty
-        if self.zones:
-            out["injection_zones"] = [z.summary() for z in self.zones]
+        # A result can be unpickled, or held in a browser session, across an
+        # upgrade that added fields to this class. Reading the newer ones
+        # through getattr keeps an older object summarisable instead of
+        # raising AttributeError on a field it was built without.
+        zones = getattr(self, "zones", None)
+        series = getattr(self, "series", None)
+        if zones:
+            out["injection_zones"] = [z.summary() for z in zones]
             out["zone_allocation"] = self.project.zone_allocation()
-        if self.series:
-            out["aor_by_reevaluation_year"] = delineate.series_growth(self.series)
+        if series:
+            out["aor_by_reevaluation_year"] = delineate.series_growth(series)
         return out
 
     @property
