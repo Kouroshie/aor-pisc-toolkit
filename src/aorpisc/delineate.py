@@ -476,6 +476,192 @@ def delineate_analytical(model, wells, threshold_pressure: float,
     )
 
 
+# ==========================================================================
+# stacked injection zones, and the AoR through time
+# ==========================================================================
+def combine(parts, *, labels=None, method: str = "") -> AoRResult:
+    """Union the AoRs of several injection zones into one project AoR.
+
+    An operator may complete a single wellbore in two or more formations.
+    Each one has its own pressure regime, its own threshold pressure and so
+    its own AoR, and the project AoR is the union of them: the rule protects a
+    USDW from fluid movement out of *any* injection zone, so a region that
+    only the deeper zone reaches is still in the Area of Review.
+
+    The union is geometric, not an area sum. Stacked zones normally overlap
+    heavily, so adding acreages double-counts the overlap and overstates the
+    AoR, sometimes by a factor approaching the number of zones.
+
+    Each component is unioned with its own kind, so the returned result still
+    separates plume from pressure front and can still say which one controls.
+    """
+    _require_shapely()
+    parts = [a for a in parts if a is not None]
+    if not parts:
+        raise ValueError("combine() needs at least one AoRResult")
+    if len(parts) == 1 and labels is None:
+        return parts[0]
+
+    names = list(labels or [a.metadata.get("zone", f"zone {i + 1}")
+                            for i, a in enumerate(parts)])
+
+    def _u(attr):
+        geoms = [getattr(a, attr) for a in parts
+                 if getattr(a, attr) is not None and not getattr(a, attr).is_empty]
+        return unary_union(geoms) if geoms else MultiPolygon()
+
+    plume, press = _u("plume"), _u("pressure_front")
+    aor = unary_union([g for g in (plume, press) if not g.is_empty]) or MultiPolygon()
+    if aor.is_empty:
+        aor = MultiPolygon()
+
+    by_zone = {n: {"area_acres": a.area_acres,
+                   "threshold_psi": U.pressure_out(a.threshold_pressure, "psi"),
+                   "controlling_component": a.controlling_component()}
+               for n, a in zip(names, parts, strict=False)}
+    total = U.area_out(aor.area, "acres")
+    largest = max(parts, key=lambda a: a.area_m2)
+    warnings = [w for a in parts for w in a.warnings]
+    if len(parts) > 1:
+        summed = sum(a.area_acres for a in parts)
+        if summed > 0:
+            warnings.append(
+                f"{len(parts)} injection zones were delineated separately and "
+                f"unioned: {total:,.0f} acres, against {summed:,.0f} acres if "
+                f"the zone AoRs were added. State the union in the permit and "
+                f"show the per-zone areas behind it [40 CFR 146.84(c)].")
+
+    return AoRResult(
+        plume=plume, pressure_front=press, aor=aor,
+        threshold_pressure=largest.threshold_pressure,
+        plume_criterion=largest.plume_criterion,
+        method=method or f"union of {len(parts)} injection-zone delineations",
+        injection_wells=sorted({w for a in parts for w in a.injection_wells}),
+        metadata={"zones": names, "by_zone": by_zone,
+                  "governing_zone": names[parts.index(largest)],
+                  "union_area_acres": total,
+                  "sum_of_zone_areas_acres": sum(a.area_acres for a in parts)},
+        warnings=list(dict.fromkeys(warnings)),
+    )
+
+
+@dataclass
+class AoRSnapshot:
+    """The AoR as it would be delineated with the model stopped at ``time``."""
+
+    time: float                      # s since the start of injection
+    aor: AoRResult
+
+    @property
+    def year(self) -> float:
+        return U.time_out(self.time, "yr")
+
+    @property
+    def area_acres(self) -> float:
+        return self.aor.area_acres
+
+    def summary(self) -> dict:
+        return {"year": self.year, "area_acres": self.area_acres,
+                "plume_area_acres": U.area_out(
+                    0.0 if self.aor.plume.is_empty else self.aor.plume.area, "acres"),
+                "pressure_front_area_acres": U.area_out(
+                    0.0 if self.aor.pressure_front.is_empty
+                    else self.aor.pressure_front.area, "acres"),
+                "controlling_component": self.aor.controlling_component()}
+
+
+def aor_series(x, y, times, *, dp_fields=None, plume_fields=None,
+               threshold_pressure: float = 0.0, plume_level: float = 1e-6,
+               plume_criterion: str = "", interval: float | None = None,
+               at_times=None, mode: str = "cumulative",
+               method: str = "", wells=None) -> list[AoRSnapshot]:
+    """Delineate the AoR at intervals through the simulation.
+
+    Why this exists: 40 CFR 146.84(e) requires the AoR to be re-evaluated at
+    least every five years, and each re-evaluation asks whether the AoR has
+    expanded into ground that has not been screened for artificial
+    penetrations. A series of AoRs on that cadence is the re-evaluation
+    schedule drawn in advance, and the growth between consecutive snapshots is
+    exactly the area 146.84(e)(2) makes subject to corrective action.
+
+    ``mode="cumulative"`` (the default) delineates each snapshot from the
+    maximum-over-time fields up to that date, which is how an AoR is defined:
+    the snapshot is the AoR a reviewer would approve if the project were
+    evaluated then. ``mode="instantaneous"`` contours the fields at that date
+    alone, which shows the pressure front relaxing after shut-in but is not an
+    AoR in the regulatory sense and is offered only for diagnosis.
+
+    ``interval`` is in seconds (use ``U.time(5, "yr")``); pass ``at_times``
+    instead to choose the dates directly.
+    """
+    _require_shapely()
+    t = np.asarray(times, float)
+    if t.size == 0:
+        return []
+
+    if at_times is not None:
+        wanted = np.asarray(at_times, float)
+    else:
+        step = interval if interval else U.time(5.0, "yr")
+        n = max(1, int(np.floor(t[-1] / step)))
+        wanted = np.arange(1, n + 1) * step
+        if wanted.size == 0 or wanted[-1] < t[-1] - 1e-9:
+            wanted = np.append(wanted, t[-1])   # always finish on the last date
+
+    out: list[AoRSnapshot] = []
+    seen: set[int] = set()
+    for want in wanted:
+        i = int(np.searchsorted(t, want, side="right")) - 1
+        if i < 0 or i in seen:
+            # Two requested dates can fall between the same pair of model
+            # output times. Emitting the snapshot twice would show a
+            # re-evaluation that added nothing, which is an artefact of the
+            # output schedule rather than a fact about the AoR.
+            continue
+        seen.add(i)
+        if mode.startswith("inst"):
+            dp = None if dp_fields is None else np.asarray(dp_fields)[i]
+            pl = None if plume_fields is None else np.asarray(plume_fields)[i]
+        else:
+            dp = None if dp_fields is None else envelope(np.asarray(dp_fields)[:i + 1])
+            pl = (None if plume_fields is None
+                  else envelope(np.asarray(plume_fields)[:i + 1]))
+        snap = delineate(
+            x, y, dp_field=dp, threshold_pressure=threshold_pressure,
+            plume_field=pl, plume_level=plume_level,
+            plume_criterion=plume_criterion,
+            method=method or f"{mode} delineation at {U.time_out(t[i], 'yr'):.0f} yr",
+            wells=list(wells or []),
+            metadata={"year": U.time_out(t[i], "yr"), "mode": mode})
+        # A snapshot that does not reach the domain edge is not evidence about
+        # the final AoR, and repeating the full-run warnings once per snapshot
+        # would bury the ones that matter.
+        snap.warnings = []
+        out.append(AoRSnapshot(time=float(t[i]), aor=snap))
+    return out
+
+
+def series_growth(series: list[AoRSnapshot]) -> list[dict]:
+    """Area added between consecutive snapshots: the re-evaluation ledger."""
+    rows = []
+    prev = None
+    for snap in series:
+        row = {"year": snap.year, "area_acres": snap.area_acres}
+        if prev is None:
+            row.update({"added_acres": snap.area_acres, "growth_percent": float("nan"),
+                        "newly_included_acres": snap.area_acres})
+        else:
+            added = snap.aor.aor.difference(prev.aor.aor)
+            row.update({
+                "added_acres": snap.area_acres - prev.area_acres,
+                "growth_percent": (100.0 * (snap.area_acres - prev.area_acres)
+                                   / prev.area_acres if prev.area_acres else float("nan")),
+                "newly_included_acres": U.area_out(added.area, "acres")})
+        rows.append(row)
+        prev = snap
+    return rows
+
+
 def compare_aors(a: AoRResult, b: AoRResult, label_a="A", label_b="B") -> dict:
     """Quantify how two AoR delineations differ.
 
@@ -510,4 +696,5 @@ def compare_aors(a: AoRResult, b: AoRResult, label_a="A", label_b="B") -> dict:
 __all__ = [
     "HAVE_SHAPELY", "field_to_polygons", "circles_to_polygon", "envelope",
     "AoRResult", "delineate", "delineate_analytical", "compare_aors",
+    "combine", "AoRSnapshot", "aor_series", "series_growth",
 ]

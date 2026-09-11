@@ -22,8 +22,8 @@ from datetime import datetime, timezone
 
 import numpy as np
 
+from . import delineate, viz
 from . import units as U
-from . import viz
 
 
 # --------------------------------------------------------------------------
@@ -323,6 +323,47 @@ def build_html(result, *, include_figures: bool = True,
                               "distance_ft": U.length_out(v, "ft"),
                               "distance_mi": U.length_out(v, "mi")}
                              for k, v in az.items()])]
+
+    # 3b stacked injection zones
+    if result.zones:
+        parts += [
+            "<h3>Injection zones</h3>",
+            "<p class='cite'>Each zone was delineated separately, with its own "
+            "fluid properties and its own threshold pressure, and the Area of "
+            "Review above is the geometric union of the zone delineations. The "
+            "union is not the sum: stacked zones overlap, and adding the zone "
+            "acreages would overstate the AoR.</p>",
+            _rows_table([z.summary() for z in result.zones]),
+            "<h3>Rate allocation between zones</h3>",
+            _rows_table(p.zone_allocation()),
+        ]
+        union = result.aor.metadata.get("union_area_acres", result.aor.area_acres)
+        summed = result.aor.metadata.get("sum_of_zone_areas_acres", union)
+        parts.append(_callout(
+            "note", "Union, not sum",
+            f"Project AoR {union:,.0f} acres. The zone AoRs add up to "
+            f"{summed:,.0f} acres, which double-counts the "
+            f"{summed - union:,.0f} acres where they overlap."))
+
+    # 3c the AoR through time
+    if result.series:
+        rows = delineate.series_growth(result.series)
+        parts += [
+            "<h3>Area of Review at each re-evaluation</h3>",
+            "<p class='cite'>40 CFR 146.84(e) - the AoR is re-evaluated at "
+            "least every five years. Ground newly inside the AoR at a "
+            "re-evaluation is subject to artificial-penetration "
+            "identification, assessment and corrective action under "
+            "146.84(e)(2)-(3).</p>",
+            _rows_table(rows),
+        ]
+        first, last = result.series[0], result.series[-1]
+        parts.append(_callout(
+            "note", "AoR growth",
+            f"{first.area_acres:,.0f} acres at year {first.year:,.0f}, "
+            f"{last.area_acres:,.0f} acres at year {last.year:,.0f}. Each "
+            "snapshot is delineated from the maximum-over-time fields up to "
+            "that date."))
 
     # 4 corrective action
     if result.corrective:

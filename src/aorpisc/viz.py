@@ -862,6 +862,290 @@ def plotly_pisc(result, theme="light"):
     return fig
 
 
+# ==========================================================================
+# the AoR through time, and across stacked injection zones
+# ==========================================================================
+def _ramp(theme, n, slot=PRESSURE_COLOR):
+    """n colours from near-surface to the full hue: an ordinal time ramp."""
+    from matplotlib.colors import to_rgb
+
+    p = palette(theme)
+    base = np.array(to_rgb(p["series"][slot]))
+    surf = np.array(to_rgb(p["surface"]))
+    return [tuple(surf + (0.3 + 0.7 * (i / max(n - 1, 1))) * (base - surf))
+            for i in range(n)]
+
+
+def _scaled(geom, scale):
+    """A geometry in the map's display units. Shapely works in metres."""
+    from shapely.affinity import scale as sscale
+
+    return sscale(geom, xfact=scale, yfact=scale, origin=(0, 0))
+
+
+def _rgba(rgb, alpha):
+    r, g, b = (int(round(255 * v)) for v in rgb[:3])
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def aor_series_map(series, *, wells=None, theme="light", length_unit="mi",
+                   figsize=(8.5, 7.5), ax=None,
+                   title="Area of Review at each re-evaluation"):
+    """Nested AoR outlines, one per re-evaluation date, on a single map.
+
+    The point of drawing them together is that the reader sees the *growth*,
+    not a sequence of separate maps they have to hold in their head. Time runs
+    light to dark along one hue, which is ordinal, and every outline is
+    labelled with its year and acreage so identity never rests on colour.
+    """
+    import matplotlib.pyplot as plt
+
+    p = palette(theme)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure
+    scale = 1.0 / U.length(1.0, length_unit)
+    cols = _ramp(theme, len(series))
+
+    for i, snap in enumerate(series):
+        geom = snap.aor.aor
+        if geom is None or geom.is_empty:
+            continue
+        last = i == len(series) - 1
+        _draw_geom(ax, _scaled(geom, scale), facecolor=None, edgecolor=cols[i],
+                   lw=2.4 if last else 1.5, zorder=3 + i * 0.01)
+    # label only the outermost, plus a legend proxy per snapshot: a dozen
+    # labels on nested rings is noise, a legend is read once
+    handles = [plt.Line2D([], [], color=cols[i], lw=2.0,
+                          label=f"{snap.year:,.0f} yr - {snap.area_acres:,.0f} acres")
+               for i, snap in enumerate(series)]
+    if handles:
+        ax.legend(handles=handles, loc="upper right", fontsize=8, frameon=True,
+                  facecolor=p["surface"], edgecolor=p["grid"])
+
+    if wells:
+        ax.scatter([w.x * scale for w in wells], [w.y * scale for w in wells],
+                   s=90, marker="v", color=p["ink"], edgecolor=p["surface"],
+                   linewidth=2.0, zorder=7)
+
+    ax.autoscale_view()
+    _style(ax, theme, xlabel=f"easting ({length_unit})",
+           ylabel=f"northing ({length_unit})", title=title)
+    ax.set_aspect("equal", adjustable="datalim")
+    fig.tight_layout()
+    return fig
+
+
+def aor_growth_chart(series, *, injection_end=None, theme="light",
+                     figsize=(9.0, 4.4), ax=None):
+    """AoR acreage against time, with the area added at each re-evaluation.
+
+    Two panels sharing an x-axis rather than two y-scales on one frame: the
+    cumulative area is a level, the area added is a difference, and drawing
+    them on one axis invites reading a rate as a size.
+    """
+    import matplotlib.pyplot as plt
+
+    p = palette(theme)
+    years = [s.year for s in series]
+    areas = [s.area_acres for s in series]
+    added = [areas[0]] + [areas[i] - areas[i - 1] for i in range(1, len(areas))]
+
+    if ax is None:
+        fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True,
+                                 gridspec_kw={"height_ratios": [2, 1]})
+    else:
+        fig, axes = ax.figure, [ax, ax]
+
+    axes[0].plot(years, areas, marker="o", color=p["series"][PRESSURE_COLOR], lw=2.2)
+    axes[0].fill_between(years, areas, color=p["series"][PRESSURE_COLOR], alpha=0.12)
+    axes[1].bar(years, added, width=max(0.6 * min(np.diff(years), default=2.0), 0.5),
+                color=p["series"][PLUME_COLOR], alpha=0.85)
+
+    if injection_end:
+        for a in axes:
+            a.axvline(U.time_out(injection_end, "yr"), color=p["ink_3"],
+                      ls="--", lw=1.2, zorder=1)
+        axes[0].annotate("injection ends",
+                         xy=(U.time_out(injection_end, "yr"), max(areas)),
+                         xytext=(4, -10), textcoords="offset points",
+                         fontsize=8, color=p["ink_2"])
+
+    _style(axes[0], theme, ylabel="AoR (acres)",
+           title="Area of Review through the project")
+    _style(axes[1], theme, xlabel="years from start of injection",
+           ylabel="added (acres)")
+    fig.tight_layout()
+    return fig
+
+
+def zone_map(zones, combined=None, *, wells=None, theme="light",
+             length_unit="mi", figsize=(8.5, 7.5), ax=None,
+             title="Area of Review by injection zone"):
+    """Each stacked zone's AoR, with the union drawn over them.
+
+    Colour is categorical here, not ordinal: the zones are identities, not an
+    ordered quantity, so they take the fixed categorical slots and the union
+    is drawn as a heavy ink outline because it is the result, not a peer.
+    """
+    import matplotlib.pyplot as plt
+
+    p = palette(theme)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=figsize)
+    else:
+        fig = ax.figure
+    scale = 1.0 / U.length(1.0, length_unit)
+
+    handles = []
+    for i, zr in enumerate(zones):
+        colour = p["series"][i % len(p["series"])]
+        _draw_geom(ax, _scaled(zr.aor.aor, scale), facecolor=colour,
+                   edgecolor=colour, lw=1.8, alpha=0.18, zorder=3 + i * 0.01)
+        handles.append(plt.Line2D(
+            [], [], color=colour, lw=2.2,
+            label=f"{zr.name} - {zr.aor.area_acres:,.0f} acres, "
+                  f"dPc {U.pressure_out(zr.threshold.delta_p_critical, 'psi'):,.0f} psi"))
+
+    if combined is not None and not combined.aor.is_empty:
+        _draw_geom(ax, _scaled(combined.aor, scale), facecolor=None,
+                   edgecolor=p["ink"], lw=3.0, ls="--", zorder=6)
+        handles.append(plt.Line2D(
+            [], [], color=p["ink"], lw=2.6, ls="--",
+            label=f"project AoR (union) - {combined.area_acres:,.0f} acres"))
+
+    if wells:
+        ax.scatter([w.x * scale for w in wells], [w.y * scale for w in wells],
+                   s=90, marker="v", color=p["ink"], edgecolor=p["surface"],
+                   linewidth=2.0, zorder=7)
+
+    ax.legend(handles=handles, loc="upper right", fontsize=8, frameon=True,
+              facecolor=p["surface"], edgecolor=p["grid"])
+    ax.autoscale_view()
+    _style(ax, theme, xlabel=f"easting ({length_unit})",
+           ylabel=f"northing ({length_unit})", title=title)
+    ax.set_aspect("equal", adjustable="datalim")
+    fig.tight_layout()
+    return fig
+
+
+def plotly_aor_series(series, *, wells=None, theme="light", length_unit="mi"):
+    """Interactive nested AoRs with a slider that steps through the years.
+
+    Every outline is drawn; the slider reveals them up to the chosen year, so
+    dragging it plays the AoR growing and releasing it leaves the full nest
+    visible. Requires plotly.
+    """
+    import plotly.graph_objects as go
+
+    p = palette(theme)
+    scale = 1.0 / U.length(1.0, length_unit)
+    cols = _ramp(theme, len(series))
+    fig = go.Figure()
+
+    trace_year = []
+    for i, snap in enumerate(series):
+        name = f"{snap.year:,.0f} yr - {snap.area_acres:,.0f} acres"
+        first = True
+        for gpoly in _polys(snap.aor.aor):
+            xy = np.asarray(gpoly.exterior.coords) * scale
+            fig.add_trace(go.Scatter(
+                x=xy[:, 0], y=xy[:, 1], mode="lines", name=name,
+                line=dict(color=_rgba(cols[i], 1.0),
+                          width=3 if i == len(series) - 1 else 1.8),
+                fill="toself", fillcolor=_rgba(cols[i], 0.10),
+                legendgroup=name, showlegend=first,
+                hovertemplate=f"{name}<extra></extra>"))
+            trace_year.append(i)
+            first = False
+
+    if wells:
+        inj = [w for w in wells if getattr(w, "kind", "injector") == "injector"]
+        fig.add_trace(go.Scatter(
+            x=[w.x * scale for w in inj], y=[w.y * scale for w in inj],
+            mode="markers+text", name="injector",
+            marker=dict(symbol="triangle-down", size=13, color=p["ink"],
+                        line=dict(color=p["surface"], width=2)),
+            text=[w.name for w in inj], textposition="top right",
+            textfont=dict(size=10, color=p["ink"])))
+        trace_year.append(-1)                      # always visible
+
+    steps = []
+    for i, snap in enumerate(series):
+        steps.append(dict(
+            method="update", label=f"{snap.year:,.0f}",
+            args=[{"visible": [k <= i or k < 0 for k in trace_year]},
+                  {"title": f"Area of Review at year {snap.year:,.0f}: "
+                            f"{snap.area_acres:,.0f} acres"}]))
+
+    fig.update_layout(
+        template="plotly_white" if theme == "light" else "plotly_dark",
+        paper_bgcolor=p["surface"], plot_bgcolor=p["surface"],
+        title=(f"Area of Review at year {series[-1].year:,.0f}: "
+               f"{series[-1].area_acres:,.0f} acres" if series else "Area of Review"),
+        xaxis=dict(title=f"easting ({length_unit})"),
+        yaxis=dict(title=f"northing ({length_unit})", scaleanchor="x", scaleratio=1),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        sliders=[dict(active=len(series) - 1, pad={"t": 40},
+                      currentvalue={"prefix": "year "}, steps=steps)] if steps else [],
+        margin=dict(l=60, r=20, t=70, b=50), height=680)
+    return fig
+
+
+def plotly_zone_map(zones, combined=None, *, wells=None, theme="light",
+                    length_unit="mi"):
+    """Interactive per-zone AoRs with the union over them. Requires plotly."""
+    import plotly.graph_objects as go
+
+    p = palette(theme)
+    scale = 1.0 / U.length(1.0, length_unit)
+    fig = go.Figure()
+
+    def add(geom, name, colour, fill, width, dash=None):
+        first = True
+        for gpoly in _polys(geom):
+            xy = np.asarray(gpoly.exterior.coords) * scale
+            fig.add_trace(go.Scatter(
+                x=xy[:, 0], y=xy[:, 1], mode="lines", name=name,
+                line=dict(color=colour, width=width, dash=dash),
+                fill="toself" if fill else None, fillcolor=fill,
+                legendgroup=name, showlegend=first,
+                hovertemplate=f"{name}<extra></extra>"))
+            first = False
+
+    for i, zr in enumerate(zones):
+        colour = p["series"][i % len(p["series"])]
+        rgb = tuple(int(colour.lstrip("#")[k:k + 2], 16) for k in (0, 2, 4))
+        add(zr.aor.aor,
+            f"{zr.name} - {zr.aor.area_acres:,.0f} acres "
+            f"(dPc {U.pressure_out(zr.threshold.delta_p_critical, 'psi'):,.0f} psi)",
+            colour, f"rgba({rgb[0]},{rgb[1]},{rgb[2]},0.18)", 2)
+
+    if combined is not None:
+        add(combined.aor, f"project AoR (union) - {combined.area_acres:,.0f} acres",
+            p["ink"], None, 3, dash="dash")
+
+    if wells:
+        inj = [w for w in wells if getattr(w, "kind", "injector") == "injector"]
+        fig.add_trace(go.Scatter(
+            x=[w.x * scale for w in inj], y=[w.y * scale for w in inj],
+            mode="markers+text", name="injector",
+            marker=dict(symbol="triangle-down", size=13, color=p["ink"],
+                        line=dict(color=p["surface"], width=2)),
+            text=[w.name for w in inj], textposition="top right",
+            textfont=dict(size=10, color=p["ink"])))
+
+    fig.update_layout(
+        template="plotly_white" if theme == "light" else "plotly_dark",
+        paper_bgcolor=p["surface"], plot_bgcolor=p["surface"],
+        xaxis=dict(title=f"easting ({length_unit})"),
+        yaxis=dict(title=f"northing ({length_unit})", scaleanchor="x", scaleratio=1),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        margin=dict(l=60, r=20, t=60, b=50), height=650)
+    return fig
+
+
 def save(fig, path: str, dpi: int = 150) -> str:
     """Save a matplotlib figure, keeping the theme background."""
     fig.savefig(path, dpi=dpi, bbox_inches="tight",
@@ -874,4 +1158,6 @@ __all__ = [
     "threshold_comparison", "tornado_chart", "probabilistic_aor_map",
     "monte_carlo_histogram", "migration_rose", "comparison_map",
     "cross_section", "plotly_aor_map", "plotly_pisc", "save",
+    "aor_series_map", "aor_growth_chart", "zone_map",
+    "plotly_aor_series", "plotly_zone_map",
 ]

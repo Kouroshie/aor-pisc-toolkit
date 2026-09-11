@@ -16,7 +16,7 @@ has to guess.  See ``docs/input_schema.md`` for the annotated schema and
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -103,6 +103,7 @@ class WellSpec:
     max_bhp: float = float("inf")
     latitude: float = float("nan")
     longitude: float = float("nan")
+    zone: str = ""          # injection zone completed; "" = all of them
 
     def total_mass(self) -> float:
         total, prev_t, prev_q = 0.0, None, 0.0
@@ -131,6 +132,11 @@ class Project:
     injection_zone: Zone = field(default_factory=Zone)
     confining_zone: Zone = field(default_factory=Zone)
     usdw: Zone = field(default_factory=Zone)
+    # Stacked completions: an operator may inject into two or more formations
+    # through one wellbore. Empty means the single zone above, which is what
+    # every existing project file describes.
+    injection_zones: list[Zone] = field(default_factory=list)
+    confining_zones: list[Zone] = field(default_factory=list)
 
     relperm: RelPerm = field(default_factory=BrooksCorey)
     wells: list[WellSpec] = field(default_factory=list)
@@ -156,6 +162,8 @@ class Project:
 
     plume_criterion: str = "CO2 column-averaged saturation >= 0.01"
     plume_cutoff: float = 0.01
+    # 40 CFR 146.84(e): the AoR is re-evaluated at least this often.
+    aor_reevaluation_years: float = 5.0
 
     penetrations_csv: str = ""
     penetrations_unit: str = "m"
@@ -218,6 +226,26 @@ class Project:
         p.confining_zone = zone("confining_zone", "confining zone")
         p.usdw = zone("usdw", "lowermost USDW")
 
+        # formation.injection_zones: a list of stacked intervals, each able to
+        # carry its own confining zone. The singular key stays the one-zone
+        # spelling, so no existing project file changes meaning.
+        stacked = d.get("formation", {}).get("injection_zones") or []
+        for k, zd in enumerate(stacked):
+            nm = str(zd.get("name") or f"zone {k + 1}")
+            p.injection_zones.append(_zone_from_dict(zd, un, nm))
+            czd = zd.get("confining_zone")
+            p.confining_zones.append(
+                _zone_from_dict(czd, un, f"{nm} confining zone") if czd
+                else p.confining_zone)
+        if len(p.injection_zones) == 1:
+            # one entry in the list is just the single-zone case spelled out
+            p.injection_zone = p.injection_zones[0]
+            p.confining_zone = p.confining_zones[0]
+            p.injection_zones, p.confining_zones = [], []
+        elif p.injection_zones:
+            p.injection_zone = p.injection_zones[0]
+            p.confining_zone = p.confining_zones[0]
+
         rp = d.get("relative_permeability", {}) or {}
         if str(rp.get("model", "brooks_corey")).lower().startswith("van"):
             p.relperm = VanGenuchten(
@@ -264,6 +292,8 @@ class Project:
             p.output_times = U.time(np.asarray(mo["output_years"], float), un.time)
         else:
             p.output_times = _default_output_times(p.end_time, p.wells)
+
+        p.aor_reevaluation_years = float(mo.get("aor_reevaluation_years", 5.0))
 
         pl = d.get("plume", {}) or {}
         p.plume_cutoff = float(pl.get("cutoff", 0.01))
@@ -394,6 +424,78 @@ class Project:
                 self.warnings.append(
                     f"well {w.name!r} has neither x/y nor latitude/longitude")
 
+    @property
+    def zones(self) -> list[Zone]:
+        """Every injection zone, whether the project gave one or several."""
+        return list(self.injection_zones) if self.injection_zones else [self.injection_zone]
+
+    @property
+    def seals(self) -> list[Zone]:
+        """The confining zone above each injection zone, index for index."""
+        if self.injection_zones:
+            return list(self.confining_zones)
+        return [self.confining_zone]
+
+    @property
+    def is_stacked(self) -> bool:
+        return len(self.zones) > 1
+
+    def zone_wells(self, index: int) -> list[WellSpec]:
+        """The wells that inject into zone ``index``, with rates allocated.
+
+        A well may name the zone it is completed in, in which case its whole
+        rate goes there. A well that names none is treated as a commingled
+        completion open to every zone, and its rate is split in proportion to
+        flow capacity ``k*h``, which is where the fluid actually goes when one
+        tubing string feeds several perforated intervals. That split is an
+        assumption, not a measurement: a project that has zonal rate
+        allocation from a distributed-temperature or spinner survey should
+        state the rates per zone explicitly instead.
+        """
+        zones = self.zones
+        z = zones[index]
+        if len(zones) == 1:
+            return list(self.wells)
+
+        kh = [float(zz.permeability) * float(zz.thickness) for zz in zones]
+        good = [v for v in kh if np.isfinite(v) and v > 0]
+        if len(good) == len(kh) and sum(good) > 0:
+            share = kh[index] / sum(kh)
+        else:
+            share = 1.0 / len(zones)
+
+        want = (z.name or "").strip().lower()
+        out: list[WellSpec] = []
+        for w in self.wells:
+            target = (w.zone or "").strip().lower()
+            if target and target != want:
+                continue
+            f = 1.0 if target else share
+            out.append(replace(w, schedule=[(t, q * f) for t, q in w.schedule]))
+        return out
+
+    def zone_allocation(self) -> list[dict]:
+        """How each zone's share of a commingled rate was arrived at."""
+        zones = self.zones
+        kh = [float(zz.permeability) * float(zz.thickness) for zz in zones]
+        total = sum(v for v in kh if np.isfinite(v) and v > 0)
+        rows = []
+        for i, z in enumerate(zones):
+            share = (kh[i] / total if total > 0 and np.isfinite(kh[i])
+                     else 1.0 / len(zones))
+            rows.append({
+                "zone": z.name or f"zone {i + 1}",
+                "top_depth_ft": U.length_out(z.top_depth, "ft"),
+                "net_thickness_ft": U.length_out(z.thickness, "ft"),
+                "permeability_mD": U.permeability_out(z.permeability, "mD"),
+                "kh_share_percent": 100.0 * share,
+                "named_completions": sum(
+                    1 for w in self.wells
+                    if (w.zone or "").strip().lower() == (z.name or "").strip().lower()),
+            })
+        return rows
+
+    # ------------------------------------------------------------------ #
     def validate(self) -> list[str]:
         """Check the things that silently ruin an AoR if they are wrong."""
         w = self.warnings
@@ -424,6 +526,33 @@ class Project:
             w.append("injection-zone net thickness is missing or non-positive")
         if np.isfinite(iz.porosity) and not 0 < iz.porosity < 1:
             w.append(f"porosity {iz.porosity} is outside (0, 1)")
+
+        if self.is_stacked:
+            names = [(z.name or "").strip().lower() for z in self.zones]
+            if len(set(names)) != len(names):
+                w.append("two injection zones share a name; zone names are how "
+                         "wells say which interval they are completed in")
+            for k, z in enumerate(self.zones):
+                if not np.isfinite(z.initial_pressure):
+                    w.append(f"zone {z.name!r} has no initial pressure, so it "
+                             "gets its own threshold pressure from no data")
+                if not np.isfinite(z.thickness) or z.thickness <= 0:
+                    w.append(f"zone {z.name!r} has no net thickness")
+                if k and np.isfinite(z.top_depth) and np.isfinite(self.zones[k - 1].top_depth) \
+                        and z.top_depth < self.zones[k - 1].top_depth:
+                    w.append("injection zones are not ordered by depth; list "
+                             "them shallowest first so the stack reads in order")
+            named = {(x.zone or "").strip().lower() for x in self.wells if x.zone}
+            unknown = named - set(names)
+            if unknown:
+                w.append(f"wells name injection zones that do not exist: "
+                         f"{sorted(unknown)}")
+            if not named:
+                w.append(
+                    f"no well names an injection zone, so the rate of each is "
+                    f"split across the {len(self.zones)} zones in proportion to "
+                    "k*h. Give per-zone rates if you have a zonal allocation "
+                    "survey.")
 
         domain = (2.0 * self.grid_half_width if np.isfinite(self.grid_half_width)
                   else self.grid_nx * self.cell_size)
@@ -513,6 +642,41 @@ class Project:
 
 
 # ==========================================================================
+def _zone_from_dict(z: dict, un: Units, name: str) -> Zone:
+    """Read one interval. Shared by the single and stacked spellings."""
+    out = Zone(name=name)
+    z = z or {}
+    if "top_depth" in z:
+        out.top_depth = U.length(float(z["top_depth"]), un.depth)
+    if "base_depth" in z:
+        out.base_depth = U.length(float(z["base_depth"]), un.depth)
+    if "thickness" in z:
+        out.thickness = U.length(float(z["thickness"]), un.length)
+    elif np.isfinite(out.top_depth) and np.isfinite(out.base_depth):
+        out.thickness = out.base_depth - out.top_depth
+    for src, dst, conv in (
+        ("porosity", "porosity", float),
+        ("permeability", "permeability",
+         lambda v: U.permeability(float(v), un.permeability)),
+        ("temperature", "temperature", lambda v: U.temperature(float(v), un.temperature)),
+        ("initial_pressure", "initial_pressure",
+         lambda v: U.pressure(float(v), un.pressure)),
+        ("rock_compressibility", "rock_compressibility",
+         lambda v: U.compressibility(float(v), un.compressibility)),
+        ("dip_degrees", "dip_degrees", float),
+        ("dip_azimuth", "dip_azimuth", float),
+        ("anisotropy_kv_kh", "anisotropy_kv_kh", float),
+    ):
+        if src in z and z[src] is not None:
+            setattr(out, dst, conv(z[src]))
+    if "salinity_ppm" in z:
+        out.salinity = fluids.salinity_to_mass_fraction(float(z["salinity_ppm"]), "ppm")
+    elif "salinity" in z:
+        out.salinity = fluids.salinity_to_mass_fraction(
+            float(z["salinity"]), z.get("salinity_unit", "ppm"))
+    return out
+
+
 def _well_from_dict(w: dict, un: Units) -> WellSpec:
     kind = str(w.get("kind", "injector")).lower()
     x = U.length(float(w.get("x", 0.0)), w.get("coordinate_unit", un.length))
@@ -542,6 +706,9 @@ def _well_from_dict(w: dict, un: Units) -> WellSpec:
         radius=U.length(float(w.get("radius", 0.33)), w.get("radius_unit", "ft")),
         max_bhp=(U.pressure(float(w["max_bhp"]), un.pressure)
                  if w.get("max_bhp") is not None else float("inf")),
+        # which stacked injection zone this completion feeds; blank means the
+        # well is open to all of them and its rate gets split by k*h
+        zone=str(w.get("zone") or "").strip(),
     )
 
 

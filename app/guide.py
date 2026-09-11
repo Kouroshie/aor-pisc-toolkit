@@ -112,6 +112,25 @@ FIELD = {
                    "PISC timeframe.",
     "realisations": "Monte Carlo sample count. 150 is enough for a stable "
                     "P10/P50/P90; more tightens the tails and costs runtime.",
+    # ---- stacked injection zones
+    "stacked": "Tick this when one wellbore is perforated in two or more "
+               "formations. Each zone is then modelled separately, with its "
+               "own pressure, its own CO2 density and its own threshold "
+               "pressure, and the project AoR is the union of the zone AoRs.",
+    "zone_table": "Give each zone its own confining interval where they "
+                  "differ; leave those two columns blank to use the confining "
+                  "zone in the sidebar for all of them.",
+    "well_zone": "Put a zone name in the `zone` column to send a well's whole "
+                 "rate to that interval. Leave it blank for a commingled "
+                 "completion and the rate is split between zones in "
+                 "proportion to k*h.",
+    "allocation_note": "A commingled rate is split by flow capacity, k*h, "
+                       "which is where fluid goes when one tubing string "
+                       "feeds several perforated intervals. It is an "
+                       "assumption, not a measurement. If you have zonal "
+                       "allocation from a spinner or distributed-temperature "
+                       "survey, name the zone on each well row instead and "
+                       "enter the measured rates.",
     # ---- wells and other panels
     "wells": "Rates are million tonnes of CO2 per year. start_year and "
              "stop_year are measured from the start of the simulation, so a "
@@ -162,6 +181,18 @@ LEAD = {
     "uncertainty": "Which inputs actually move the AoR, and how wide the "
                    "answer is when they move together. The tornado ranks them "
                    "one at a time; the Monte Carlo samples them jointly.",
+    "zones": "This project injects into <b>more than one formation</b>. Each "
+             "zone was modelled on its own grid, with CO2 properties at its "
+             "own pressure and temperature and a threshold pressure from its "
+             "own depth. The project AoR is the <b>geometric union</b> of the "
+             "zone AoRs, because the rule protects a USDW from fluid movement "
+             "out of any injection zone: ground only the deepest zone reaches "
+             "is still inside the Area of Review.",
+    "series": "The AoR as it would stand at each <b>re-evaluation date</b>. "
+              "40 CFR 146.84(e) requires the delineation to be redone at "
+              "least every five years, and the ground added between two "
+              "dates is exactly what 146.84(e)(2) makes subject to "
+              "artificial-penetration identification and corrective action.",
     "export": "Everything on this page, in formats a reviewer or a GIS can "
               "open. 40 CFR 146.84(g) requires the modelling inputs behind an "
               "AoR delineation to be retained for ten years: the project YAML "
@@ -231,6 +262,19 @@ GLOSSARY = [
     ("Tornado / Monte Carlo",
      "One-at-a-time sensitivity ranking, and joint random sampling. Together "
      "they answer 'what moves the answer' and 'how wide is the answer'."),
+    ("Stacked injection zones",
+     "Two or more formations taking CO2 through one wellbore. Each is "
+     "delineated on its own and the project AoR is the union of them; adding "
+     "the zone acreages instead double-counts the overlap and overstates the "
+     "AoR."),
+    ("Commingled completion",
+     "One tubing string open to several perforated intervals at once. Without "
+     "a zonal allocation survey the rate into each is estimated from flow "
+     "capacity k*h."),
+    ("AoR re-evaluation",
+     "The periodic redelineation required by 40 CFR 146.84(e), at least every "
+     "five years. Ground newly inside the AoR must be screened for artificial "
+     "penetrations and brought into the corrective-action plan."),
     ("Stabilisation",
      "The plume no longer expanding and pressure decaying below the "
      "threshold. Demonstrating it is the precondition for shortening PISC."),
@@ -260,7 +304,8 @@ def render() -> None:
         "record of what was run.")
 
     st.markdown("### What each panel is for")
-    for label, key in (("AoR map", "aor"), ("GIS map", "gis"),
+    for label, key in (("AoR map", "aor"), ("AoR over time", "series"),
+                       ("Zones", "zones"), ("GIS map", "gis"),
                        ("Threshold", "threshold"), ("PISC", "pisc"),
                        ("Corrective action", "corrective"),
                        ("Uncertainty", "uncertainty"), ("Export", "export")):
@@ -279,6 +324,28 @@ def render() -> None:
                     f"<div class='aor-term'><dt>{term}</dt>"
                     f"<dd>{definition}</dd></div>", unsafe_allow_html=True)
 
+    st.markdown("### Injecting into more than one formation")
+    st.markdown(
+        "A well completed in two or more zones is not the same project as a "
+        "well in one thicker zone, and cannot be modelled as one. Each zone "
+        "sits at its own depth and pressure, so CO2 has a different density "
+        "in each, each zone gets its own threshold pressure measured against "
+        "the same USDW, and each spreads differently because k, h and "
+        "porosity differ.\n\n"
+        "This tool runs the whole delineation once per zone and takes the "
+        "**geometric union** of the results. Two things follow that are worth "
+        "stating in a permit:\n\n"
+        "- The project AoR is **not** the sum of the zone AoRs. Stacked zones "
+        "overlap heavily, so adding acreages can overstate the AoR by "
+        "something approaching the number of zones. The Zones panel shows the "
+        "union, the sum, and the overlap between them.\n"
+        "- The **deepest zone often controls one direction and the shallowest "
+        "another**, so the union has a shape neither zone has on its own. "
+        "That shape is the thing to map and to screen for penetrations.\n\n"
+        "Where the rate into each zone is not measured, it is split by flow "
+        "capacity k*h. Name the zone on a well row to override that with a "
+        "measured allocation.")
+
     st.markdown("### Where this tool should not be trusted")
     st.warning(
         "**Thick injection zones.** The vertical-equilibrium engine assumes "
@@ -287,6 +354,13 @@ def render() -> None:
         "250 ft zone, but runs 1.5 to 1.8 times wide on a 1,200 to 2,000 ft "
         "shale-punctuated interval. Treat a thick-zone AoR as a conservative "
         "upper bound and cross-check it against a full-physics simulator.")
+    st.warning(
+        "**Stacked zones are modelled as hydraulically independent.** Each "
+        "zone is solved on its own grid, so pressure built up in one does not "
+        "push back on another through a leaky seal or a shared aquifer leg. "
+        "Where zones are known to be in communication, that assumption "
+        "understates pressure buildup and the pressure-front AoR with it; "
+        "carry such a case to a multi-layer simulator and import the result.")
     st.warning(
         "**Monte Carlo areas are not the base-case area.** The uncertainty "
         "run uses the fast analytical engine, so its absolute AoR areas are "

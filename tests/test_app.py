@@ -44,7 +44,10 @@ def test_a_full_run_fills_every_panel():
     at.button[0].click().run()
     assert not at.exception, [e.value for e in at.exception]
 
-    assert len(at.tabs) == 8                      # seven results plus Help
+    labels = [t.label for t in at.tabs]
+    assert labels == ["AoR map", "AoR over time", "GIS map", "Threshold", "PISC",
+                      "Corrective action", "Uncertainty", "Export", "Help"]
+    assert "Zones" not in labels          # a single-zone project has no stack
     labels = [m.label for m in at.metric]
     assert labels == ["AoR area", "Threshold dP", "CO2 injected",
                       "PISC supported by model"]
@@ -52,3 +55,24 @@ def test_a_full_run_fills_every_panel():
     page = " ".join(m.value for m in at.markdown)
     assert "aor-lead" in page                     # per-panel orientation notes
     assert "Glossary" in page                     # the Help panel rendered
+
+
+@pytest.mark.slow
+def test_ticking_stacked_completion_adds_a_zones_panel():
+    """The stacked path has its own widgets, its own tab and its own figures,
+    none of which the single-zone run exercises."""
+    at = AppTest.from_file(APP, default_timeout=900).run()
+    box = [c for c in at.checkbox if "more than one formation" in c.label]
+    assert box, [c.label for c in at.checkbox]
+    box[0].check().run()
+    assert not at.exception, [e.value for e in at.exception]
+
+    at.button[0].click().run()
+    assert not at.exception, [e.value for e in at.exception]
+
+    labels = [t.label for t in at.tabs]
+    assert "Zones" in labels
+    assert "AoR over time" in labels
+
+    page = " ".join(m.value for m in at.markdown)
+    assert "union" in page.lower()

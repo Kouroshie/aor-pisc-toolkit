@@ -51,6 +51,44 @@ Defaults in **bold**.
 
 Three intervals. Depths are **positive downward** from the stated datum.
 
+For a well completed in more than one formation, give `injection_zones` (a
+list) instead of `injection_zone`. Each entry takes every key the singular
+form does, plus a `name`, and may carry its own `confining_zone`; zones left
+without one fall back to `formation.confining_zone`. List them shallowest
+first.
+
+```yaml
+formation:
+  injection_zones:
+    - name: Frio A
+      top_depth: 5200
+      thickness: 180
+      porosity: 0.20
+      permeability: 220
+      temperature: 140
+      salinity_ppm: 70000
+      initial_pressure: 2250
+      confining_zone: {top_depth: 5000, base_depth: 5200}
+    - name: Frio B
+      top_depth: 6000
+      thickness: 250
+      porosity: 0.18
+      permeability: 150
+      temperature: 150
+      salinity_ppm: 90000
+      initial_pressure: 2600
+      confining_zone: {top_depth: 5700, base_depth: 6000}
+  usdw: {...}
+```
+
+Each zone is then modelled on its own grid, with CO2 properties evaluated at
+its own pressure and temperature and a threshold pressure computed from its
+own depth against the same USDW. The project AoR is the geometric **union** of
+the zone AoRs, and the per-zone delineations are reported behind it. Nothing
+is averaged across zones.
+
+A single `injection_zones` entry is identical to the singular spelling.
+
 ### `injection_zone`
 
 | key | required | notes |
@@ -152,6 +190,21 @@ longitude is the better path: the local frame is built around the well field
 automatically, the UTM zone is chosen for you, and the GIS map becomes
 available without you computing anything.
 
+Add `zone:` to send a completion's whole rate to one named injection zone of
+a stacked project. A well with no `zone` is treated as commingled and its rate
+is split between zones in proportion to flow capacity `k*h`, which is
+recorded in the result and flagged as an assumption. To use a measured zonal
+allocation, give one well row per zone with the same name and coordinates,
+each naming its zone and carrying its own rate:
+
+```yaml
+wells:
+  - {name: INJ-1, latitude: 31.9686, longitude: -99.9018, zone: Frio A,
+     rate: 0.6, start_year: 0, stop_year: 20}
+  - {name: INJ-1, latitude: 31.9686, longitude: -99.9018, zone: Frio B,
+     rate: 0.4, start_year: 0, stop_year: 20}
+```
+
 ```yaml
 wells:
   # the recommended form
@@ -206,6 +259,8 @@ model:
   boundary: infinite         # infinite | constant_pressure | noflow
   end_year: 130
   output_years: [0, 1, 2, 5, 10, 20, 30, 50, 80, 130]   # optional
+  aor_reevaluation_years: 5  # 40 CFR 146.84(e) cadence; the AoR is also
+                             # delineated at each of these dates
   grid:
     cell_size: 400           # the fine cell
     fine_half_width: 6000    # extent of the fine cells around the well field

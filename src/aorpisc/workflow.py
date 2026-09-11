@@ -20,7 +20,7 @@ number in the report is by construction the number the model produced.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -43,6 +43,51 @@ from .numerical import Grid, GridProperties, VESolver, VEWell
 
 
 @dataclass
+class ZoneResult:
+    """What one injection zone of a stacked completion produced.
+
+    Each zone is modelled on its own grid with its own fluid state and its own
+    threshold pressure, because those follow from its own depth, pressure and
+    temperature. Nothing is averaged across zones: the project AoR is the
+    union of these, not a delineation of some blended formation.
+    """
+
+    name: str
+    zone: object                     # config.Zone
+    threshold: threshold.ThresholdResult
+    aor: delineate.AoRResult
+    x: np.ndarray
+    y: np.ndarray
+    times: np.ndarray
+    dp_fields: np.ndarray
+    plume_fields: np.ndarray
+    plume_level: float
+    injected_mass: float = 0.0
+    pisc: pisc.PISCResult | None = None
+    series: list = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    def summary(self) -> dict:
+        out = {
+            "zone": self.name,
+            "top_depth_ft": U.length_out(self.zone.top_depth, "ft"),
+            "net_thickness_ft": U.length_out(self.zone.thickness, "ft"),
+            "permeability_mD": U.permeability_out(self.zone.permeability, "mD"),
+            "initial_pressure_psi": U.pressure_out(self.zone.initial_pressure, "psi"),
+            "threshold_dp_psi": U.pressure_out(
+                self.threshold.delta_p_critical, "psi"),
+            "threshold_method": self.threshold.method,
+            "co2_allocated_MMT": U.mass_out(self.injected_mass, "MMT"),
+            "aor_area_acres": self.aor.area_acres,
+            "controlling_component": self.aor.controlling_component(),
+        }
+        if self.pisc is not None:
+            out["pisc_years"] = self.pisc.summary()["recommended_pisc"].get(
+                "recommended_years", float("nan"))
+        return out
+
+
+@dataclass
 class ProjectResult:
     """Everything one project run produced."""
 
@@ -62,6 +107,11 @@ class ProjectResult:
     analytical_checks: dict = field(default_factory=dict)
     uncertainty: dict = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    # One entry per injection zone when the project is a stacked completion.
+    # Empty for a single-zone project, where `aor` is already the whole story.
+    zones: list[ZoneResult] = field(default_factory=list)
+    # The AoR as it would stand at each re-evaluation date [146.84(e)].
+    series: list = field(default_factory=list)
 
     @property
     def cell_area(self) -> float:
@@ -87,7 +137,17 @@ class ProjectResult:
             out["ve_solver"] = self.ve.summary()
         if self.uncertainty:
             out["uncertainty"] = self.uncertainty
+        if self.zones:
+            out["injection_zones"] = [z.summary() for z in self.zones]
+            out["zone_allocation"] = self.project.zone_allocation()
+        if self.series:
+            out["aor_by_reevaluation_year"] = delineate.series_growth(self.series)
         return out
+
+    @property
+    def governing_zone(self) -> ZoneResult | None:
+        """The zone whose own AoR is the largest, or None if not stacked."""
+        return max(self.zones, key=lambda z: z.aor.area_m2) if self.zones else None
 
 
 def project_crs(p: Project):
@@ -279,10 +339,14 @@ def analytical_cross_checks(p: Project) -> dict:
 
 
 # ==========================================================================
-def run(p: Project, *, penetrations: list | None = None,
-        progress: Callable[[str], None] | None = None,
-        run_uncertainty: bool | None = None) -> ProjectResult:
-    """Execute the whole AoR/PISC workflow for a project."""
+def run_zone(p: Project, *, penetrations: list | None = None,
+             progress: Callable[[str], None] | None = None,
+             label: str = "") -> ProjectResult:
+    """Execute the AoR/PISC workflow for a project with one injection zone.
+
+    :func:`run` is the entry point; this is the single-zone body it calls, once
+    per zone of a stacked completion.
+    """
     say = progress or (lambda _msg: None)
     warnings = list(p.warnings)
 
@@ -445,19 +509,196 @@ def run(p: Project, *, penetrations: list | None = None,
             dp_fields=dp_fields, threshold_pressure=th.delta_p_critical)
         warnings.extend(ca.warnings)
 
-    result = ProjectResult(
+    if label:
+        aor.metadata["zone"] = label
+
+    return ProjectResult(
         project=p, fluid=fs, thresholds=th_all, selected_threshold=th,
         aor=aor, x=x, y=y, times=times, dp_fields=dp_fields,
         plume_fields=plume_fields, pisc=pisc_res, corrective=ca,
         ve=ve_result, analytical_checks=checks, warnings=warnings,
     )
 
+
+# ==========================================================================
+def reevaluation_times(p: Project) -> np.ndarray:
+    """The dates the AoR is delineated at, in seconds.
+
+    40 CFR 146.84(e) sets the cadence: at least every five years, and the
+    project file may ask for a different one.
+    """
+    step = U.time(float(p.aor_reevaluation_years or 5.0), "yr")
+    end = float(p.end_time)
+    if step <= 0 or end <= 0:
+        return np.array([end])
+    marks = np.arange(step, end + 1e-9, step)
+    if marks.size == 0 or marks[-1] < end - 1e-6:
+        marks = np.append(marks, end)
+    return marks
+
+
+def run(p: Project, *, penetrations: list | None = None,
+        progress: Callable[[str], None] | None = None,
+        run_uncertainty: bool | None = None) -> ProjectResult:
+    """Execute the whole AoR/PISC workflow, over every injection zone.
+
+    A single-zone project runs exactly as it always has. A project with
+    stacked injection zones is run once per zone, each on its own grid with
+    its own fluids and its own threshold pressure, and the project AoR is the
+    geometric union of the zone AoRs: the rule protects a USDW from fluid
+    movement out of any injection zone, so ground that only the deepest zone
+    reaches is still inside the Area of Review.
+
+    Either way the result carries a series of AoRs on the re-evaluation
+    cadence, so the growth a reviewer will ask about is already computed.
+    """
+    say = progress or (lambda _msg: None)
+    marks = reevaluation_times(p)
+    # Make the model report at the dates the rule asks about. Without this the
+    # five-year AoR falls back to whichever output time happens to precede it,
+    # and a series meant to read 5, 10, 15 reads 3.8, 9.2, 14.6 instead.
+    p = replace(p, output_times=np.unique(np.concatenate(
+        [np.asarray(p.output_times, float), marks])))
+
+    if not p.is_stacked:
+        result = run_zone(p, penetrations=penetrations, progress=progress)
+        say("delineating the AoR through time")
+        result.series = delineate.aor_series(
+            result.x, result.y, result.times,
+            dp_fields=result.dp_fields,
+            threshold_pressure=result.selected_threshold.delta_p_critical,
+            plume_fields=result.plume_fields,
+            plume_level=(p.plume_cutoff if p.engine == "ve" else 0.5),
+            plume_criterion=p.plume_criterion, at_times=marks,
+            wells=[w.name for w in p.wells if w.kind == "injector"])
+    else:
+        result = _run_stacked(p, marks, penetrations=penetrations, progress=progress)
+
     do_unc = (p.uncertainty.get("enabled", False)
               if run_uncertainty is None else run_uncertainty)
     if do_unc:
         say("running uncertainty analysis")
-        result.uncertainty = run_uncertainty_analysis(p, th, progress=progress)
+        result.uncertainty = run_uncertainty_analysis(
+            p, result.selected_threshold, progress=progress)
     return result
+
+
+def _run_stacked(p: Project, marks: np.ndarray, *, penetrations=None,
+                 progress=None) -> ProjectResult:
+    """Run every injection zone, then union the delineations."""
+    say = progress or (lambda _msg: None)
+    zones, seals = p.zones, p.seals
+    warnings = list(p.warnings)
+    per_zone: list[ZoneResult] = []
+    zone_runs: list[ProjectResult] = []
+
+    for i, z in enumerate(zones):
+        name = z.name or f"zone {i + 1}"
+        say(f"running {name} ({i + 1} of {len(zones)})")
+        sub = replace(
+            p, injection_zone=z, confining_zone=seals[i],
+            injection_zones=[], confining_zones=[],
+            wells=p.zone_wells(i), uncertainty={}, warnings=[])
+        r = run_zone(sub, progress=None, label=name)
+        zone_runs.append(r)
+
+        series = delineate.aor_series(
+            r.x, r.y, r.times, dp_fields=r.dp_fields,
+            threshold_pressure=r.selected_threshold.delta_p_critical,
+            plume_fields=r.plume_fields,
+            plume_level=(p.plume_cutoff if p.engine == "ve" else 0.5),
+            plume_criterion=p.plume_criterion, at_times=marks,
+            wells=[w.name for w in sub.wells if w.kind == "injector"])
+
+        per_zone.append(ZoneResult(
+            name=name, zone=z, threshold=r.selected_threshold, aor=r.aor,
+            x=r.x, y=r.y, times=r.times, dp_fields=r.dp_fields,
+            plume_fields=r.plume_fields,
+            plume_level=(p.plume_cutoff if p.engine == "ve" else 0.5),
+            injected_mass=sub.total_injected_mass(),
+            pisc=r.pisc, series=series,
+            warnings=[f"[{name}] {w}" for w in r.warnings]))
+        warnings.extend(per_zone[-1].warnings)
+
+    say("combining the zone delineations")
+    combined = delineate.combine([zr.aor for zr in per_zone],
+                                 labels=[zr.name for zr in per_zone])
+    warnings.extend(combined.warnings)
+
+    # The AoR at each re-evaluation date is likewise the union over zones.
+    series = []
+    for k in range(min(len(zr.series) for zr in per_zone)):
+        snaps = [zr.series[k] for zr in per_zone]
+        series.append(delineate.AoRSnapshot(
+            time=max(sn.time for sn in snaps),
+            aor=delineate.combine([sn.aor for sn in snaps],
+                                  labels=[zr.name for zr in per_zone],
+                                  method="union of zone delineations")))
+
+    # Grid-based products need one grid. The zone with the largest AoR is the
+    # one a reviewer argues about, so its fields are the ones carried forward,
+    # and the choice is recorded rather than left implicit.
+    lead = max(range(len(per_zone)), key=lambda i: per_zone[i].aor.area_m2)
+    base = zone_runs[lead]
+    if len(per_zone) > 1:
+        warnings.append(
+            f"pressure and plume fields, PISC timing and corrective-action "
+            f"arrival times are reported from {per_zone[lead].name}, the zone "
+            f"with the largest AoR. Per-zone numbers are in the zone table; a "
+            f"penetration's arrival time in another zone may be earlier.")
+
+    # PISC: the site cannot be released until every zone has stabilised.
+    pisc_res, pisc_zone = base.pisc, per_zone[lead].name
+    for zr in per_zone:
+        if zr.pisc is None or pisc_res is None:
+            continue
+        if _pisc_years(zr.pisc) > _pisc_years(pisc_res):
+            pisc_res, pisc_zone = zr.pisc, zr.name
+    if pisc_res is not None and pisc_zone != per_zone[lead].name:
+        warnings.append(
+            f"PISC is governed by {pisc_zone}, not by the zone with the "
+            f"largest AoR: the last zone to stabilise sets the timeframe.")
+
+    ca = None
+    if penetrations is None and p.penetrations_csv:
+        penetrations = corrective.load_wells_csv(
+            p.penetrations_csv, unit=p.penetrations_unit, crs=project_crs(p))
+    if penetrations:
+        say("screening artificial penetrations")
+        shallowest = min(zones, key=lambda z: (z.top_depth if np.isfinite(z.top_depth)
+                                               else np.inf))
+        seal = seals[zones.index(shallowest)]
+        cz_top = (seal.top_depth if np.isfinite(seal.top_depth)
+                  else shallowest.top_depth - U.length(100, "ft"))
+        cz_base = (seal.base_depth if np.isfinite(seal.base_depth)
+                   else shallowest.top_depth)
+        ca = corrective.screen(
+            penetrations, combined, cz_top, cz_base,
+            injectors=[(w.x, w.y) for w in p.wells if w.kind == "injector"])
+        ca = corrective.arrival_times(
+            ca, base.x, base.y, base.times, plume_fields=base.plume_fields,
+            plume_level=(p.plume_cutoff if p.engine == "ve" else 0.5),
+            dp_fields=base.dp_fields,
+            threshold_pressure=base.selected_threshold.delta_p_critical)
+        warnings.extend(ca.warnings)
+
+    return ProjectResult(
+        project=p, fluid=base.fluid, thresholds=base.thresholds,
+        selected_threshold=base.selected_threshold, aor=combined,
+        x=base.x, y=base.y, times=base.times, dp_fields=base.dp_fields,
+        plume_fields=base.plume_fields, pisc=pisc_res, corrective=ca,
+        ve=base.ve, analytical_checks=base.analytical_checks,
+        warnings=list(dict.fromkeys(warnings)),
+        zones=per_zone, series=series,
+    )
+
+
+def _pisc_years(r) -> float:
+    try:
+        v = r.summary()["recommended_pisc"].get("recommended_years", float("nan"))
+        return float(v) if np.isfinite(v) else -1.0
+    except Exception:
+        return -1.0
 
 
 # ==========================================================================

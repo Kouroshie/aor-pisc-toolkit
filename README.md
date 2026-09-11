@@ -24,6 +24,8 @@ aorpisc run examples/epa_hypothetical_site.yaml -o out/
 | **Threshold pressure** | Four methods side by side - Thornhill/EPA Method 1, Nicot uniform-density (Method 2), a variable-density column integration, and the TCEQ/Class I static mud column + gel strength - plus explicit handling of the over-pressurised case |
 | **Flow modelling** | (a) analytical superposition - Theis + image wells + radial Buckley-Leverett + two-phase apparent skin; (b) a vertical-equilibrium two-phase numerical solver on a heterogeneous, dipping, faulted grid; (c) import of your existing CMG / ECLIPSE / TOUGH2 output |
 | **AoR delineation** | Union of the maximum-over-time plume and the maximum-over-time pressure front, exported as GeoJSON / KML / CSV, with extent-by-azimuth tables |
+| **Stacked injection zones** | One wellbore completed in several formations: each zone delineated on its own terms, with its own fluids, its own threshold pressure and its own AoR, and the project AoR taken as the **geometric union** |
+| **AoR through time** | The AoR at every re-evaluation date under 40 CFR 146.84(e), with the acreage newly included at each one - the ground that becomes subject to corrective action |
 | **Corrective action** | EPA's Figure 4-3 decision tree applied to every penetration, **plus phased corrective action scheduled by modelled arrival time** |
 | **PISC** | Plume area, expansion rate, effective-radius migration rate, directional migration, pressure decline, plume-stabilisation year, a defensible PISC duration, and the 40 CFR 146.93(c) checklist |
 | **Uncertainty** | Tornado sensitivity and a Latin-hypercube Monte Carlo producing a **probabilistic AoR** (P10 / P50 / P90 boundaries) |
@@ -215,6 +217,75 @@ boundary and by how much, and refuses to be quiet about the checks that make
 the answer meaningful: domain size against boundary influence, grid resolution
 against plume radius, CO2 mass balance, and whether the threshold method you
 picked is even applicable to your pressure regime.
+
+### Injecting into more than one formation
+
+An operator may complete one wellbore in two or more zones. That is a
+different project from one well in a thicker single zone and cannot be
+modelled as one: each zone sits at its own depth and pressure, so CO2 has a
+different density in each, each gets its own threshold pressure measured
+against the same USDW, and each spreads differently because k, h and porosity
+differ.
+
+List the zones and the toolkit runs the whole delineation once per zone, then
+unions the results:
+
+```yaml
+formation:
+  injection_zones:
+    - name: Frio A
+      top_depth: 5200
+      thickness: 180
+      permeability: 220
+      initial_pressure: 2250
+      confining_zone: {top_depth: 5000, base_depth: 5200}
+    - name: Frio B
+      top_depth: 6000
+      thickness: 250
+      permeability: 150
+      initial_pressure: 2600
+      confining_zone: {top_depth: 5700, base_depth: 6000}
+```
+
+Two consequences worth stating in a permit:
+
+- **The project AoR is not the sum of the zone AoRs.** Stacked zones overlap
+  heavily, so adding acreages overstates the AoR by something approaching the
+  number of zones. The result reports the union, the sum and the overlap.
+- **A different zone can control in different directions**, so the union has a
+  shape that neither zone has on its own. That shape is what gets mapped and
+  screened for penetrations.
+
+Where a well row names a `zone`, its whole rate goes there. Where it names
+none, the completion is treated as commingled and the rate is split between
+zones in proportion to flow capacity `k*h` - an assumption, flagged as one,
+and replaceable with a measured zonal allocation by giving one well row per
+zone.
+
+Worked example: `examples/stacked_zones.yaml`.
+
+### The AoR at each re-evaluation
+
+40 CFR 146.84(e) requires the AoR to be re-evaluated at least every five
+years, and each re-evaluation asks whether it has expanded into ground that
+has not been screened. Every run therefore carries a series of delineations on
+that cadence:
+
+```python
+res = workflow.run(project)
+for row in delineate.series_growth(res.series):
+    print(row["year"], row["area_acres"], row["newly_included_acres"])
+```
+
+Each snapshot is delineated from the maximum-over-time fields **up to that
+date**, which is the AoR a reviewer would approve if the project were
+evaluated then, and `newly_included_acres` is exactly the area
+146.84(e)(2)-(3) makes subject to artificial-penetration identification and
+corrective action. `delineate.aor_series(..., mode="instantaneous")` contours
+each date on its own instead, which shows the pressure front relaxing after
+shut-in but is not an AoR in the regulatory sense.
+
+Set the cadence with `model.aor_reevaluation_years` (default 5).
 
 ---
 

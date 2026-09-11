@@ -31,8 +31,8 @@ sys.path.insert(0, _HERE)
 import guide  # noqa: E402  (sibling module: help text)
 import theme  # noqa: E402  (sibling module: page styling)
 
+from aorpisc import delineate, report, viz, workflow  # noqa: E402
 from aorpisc import pisc as pisc_mod  # noqa: E402
-from aorpisc import report, viz, workflow  # noqa: E402
 from aorpisc import units as U  # noqa: E402
 from aorpisc.config import Project  # noqa: E402
 from aorpisc.io import exporters  # noqa: E402
@@ -203,19 +203,73 @@ def _project_from_form() -> dict:
     }
 
 
-def _well_editor() -> list[dict]:
+_ZONE_COLUMNS = ("name", "top_depth", "thickness", "porosity", "permeability",
+                 "temperature", "salinity_ppm", "initial_pressure",
+                 "confining_top", "confining_base")
+
+
+def _zone_editor() -> list[dict] | None:
+    """Optional table of stacked injection zones.
+
+    One wellbore completed in several formations is a different project from
+    one completed in a thicker single formation: each interval has its own
+    pressure, its own threshold pressure and its own AoR. When this table is
+    in use it replaces the single zone in the sidebar entirely.
+    """
+    stacked = st.checkbox(
+        "inject into more than one formation (stacked completion)",
+        value=False, key="stacked", help=H["stacked"])
+    if not stacked:
+        return None
+
+    st.caption("One row per injection zone, shallowest first. These replace "
+               "the single injection zone in the sidebar; everything else "
+               "there (relative permeability, USDW, grid, threshold method) "
+               "still applies to every zone. " + H["zone_table"])
+    default = [
+        {"name": "Upper zone", "top_depth": 5200.0, "thickness": 180.0,
+         "porosity": 0.20, "permeability": 220.0, "temperature": 140.0,
+         "salinity_ppm": 70000.0, "initial_pressure": 2250.0,
+         "confining_top": 5000.0, "confining_base": 5200.0},
+        {"name": "Lower zone", "top_depth": 6000.0, "thickness": 250.0,
+         "porosity": 0.18, "permeability": 150.0, "temperature": 150.0,
+         "salinity_ppm": 90000.0, "initial_pressure": 2600.0,
+         "confining_top": 5700.0, "confining_base": 6000.0},
+    ]
+    rows = st.data_editor(default, num_rows="dynamic", key="zones")
+    out = []
+    for r in rows:
+        if not str(r.get("name") or "").strip():
+            continue
+        z = {k: r.get(k) for k in _ZONE_COLUMNS
+             if k not in ("confining_top", "confining_base")
+             and r.get(k) is not None}
+        if r.get("confining_top") is not None and r.get("confining_base") is not None:
+            z["confining_zone"] = {"top_depth": r["confining_top"],
+                                   "base_depth": r["confining_base"]}
+        out.append(z)
+    return out or None
+
+
+def _well_editor(zones: list[dict] | None = None) -> list[dict]:
     st.subheader("Injection wells")
     # st.data_editor takes no `help`, so the table's tooltip text is shown
     # here instead of hanging off a question mark.
     st.caption("Give either x/y in feet from an arbitrary origin, or latitude "
                "and longitude. Latitude/longitude builds the local frame for "
-               "you and unlocks the GIS map. " + H["wells"])
+               "you and unlocks the GIS map. " + H["wells"]
+               + (" " + H["well_zone"] if zones else ""))
     default = [
         {"name": "INJ-1", "latitude": 31.9686, "longitude": -99.9018,
          "rate": 0.5, "start_year": 0.0, "stop_year": 20.0},
         {"name": "INJ-2", "latitude": 31.9686, "longitude": -99.8890,
          "rate": 0.5, "start_year": 0.0, "stop_year": 20.0},
     ]
+    if zones:
+        # a blank zone means the completion is open to every zone, and the
+        # rate gets split by k*h
+        for row in default:
+            row["zone"] = ""
     edited = st.data_editor(default, num_rows="dynamic", key="wells")
     return [dict(r, kind="injector") for r in edited if r.get("name")]
 
@@ -257,7 +311,10 @@ elif mode == "Shipped example":
         proj_dict = yaml.safe_load(fh)
 else:
     proj_dict = _project_from_form()
-    proj_dict["wells"] = _well_editor()
+    zone_rows = _zone_editor()
+    if zone_rows:
+        proj_dict["formation"]["injection_zones"] = zone_rows
+    proj_dict["wells"] = _well_editor(zone_rows)
 
 if not proj_dict:
     st.stop()
@@ -338,11 +395,14 @@ else:
     st.success("Domain size, grid resolution, boundary influence, mass balance "
                "and pressure-regime applicability all passed their checks.")
 
-tabs = st.tabs(["AoR map", "GIS map", "Threshold", "PISC", "Corrective action",
-                "Uncertainty", "Export", "Help"])
+_labels = ["AoR map", "AoR over time", "GIS map", "Threshold", "PISC",
+           "Corrective action", "Uncertainty", "Export", "Help"]
+if res.zones:
+    _labels.insert(1, "Zones")          # only earns a panel when there are some
+T = dict(zip(_labels, st.tabs(_labels), strict=True))
 
 # ---------------------------------------------------------------- AoR map
-with tabs[0]:
+with T["AoR map"]:
     theme.lead(guide.LEAD["aor"])
     try:
         import plotly.graph_objects as go  # noqa: F401
@@ -376,8 +436,74 @@ with tabs[0]:
             [{"azimuth (deg)": k, "distance (ft)": U.length_out(v, "ft"),
               "distance (mi)": U.length_out(v, "mi")} for k, v in az.items()], hide_index=True)
 
+# ------------------------------------------------------------ zones
+if res.zones:
+    with T["Zones"]:
+        theme.lead(guide.LEAD["zones"])
+        try:
+            st.plotly_chart(viz.plotly_zone_map(res.zones, res.aor,
+                                                wells=project.wells))
+        except ImportError:
+            st.pyplot(viz.zone_map(res.zones, res.aor, wells=[
+                w for w in project.wells if w.kind == "injector"]))
+
+        st.write("**Each zone on its own terms**")
+        st.dataframe([z.summary() for z in res.zones], hide_index=True)
+        st.caption("Each zone is modelled on its own grid, with CO2 properties "
+                   "at its own pressure and temperature and a threshold "
+                   "pressure from its own depth. Nothing is averaged across "
+                   "zones.")
+
+        union = res.aor.metadata.get("union_area_acres", res.aor.area_acres)
+        summed = res.aor.metadata.get("sum_of_zone_areas_acres", union)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Project AoR (union)", f"{union:,.0f} acres", delta_color="off")
+        c2.metric("Zone areas added up", f"{summed:,.0f} acres",
+                  "not the AoR: double-counts the overlap", delta_color="off")
+        c3.metric("Overlap", f"{summed - union:,.0f} acres",
+                  f"{100 * (summed - union) / summed:,.0f} % of the sum"
+                  if summed else "", delta_color="off")
+
+        st.write("**How each zone's share of the rate was set**")
+        st.dataframe(project.zone_allocation(), hide_index=True)
+        st.caption(H["allocation_note"])
+
+
+# ------------------------------------------------------- AoR over time
+with T["AoR over time"]:
+    theme.lead(guide.LEAD["series"])
+    if not res.series:
+        st.info("No time series for this run.")
+    else:
+        try:
+            st.plotly_chart(viz.plotly_aor_series(res.series, wells=project.wells))
+        except ImportError:
+            st.pyplot(viz.aor_series_map(res.series, wells=[
+                w for w in project.wells if w.kind == "injector"]))
+
+        st.pyplot(viz.aor_growth_chart(res.series,
+                                       injection_end=project.injection_end()))
+
+        st.write("**The re-evaluation ledger**")
+        st.dataframe(delineate.series_growth(res.series), hide_index=True)
+        st.caption("`newly_included_acres` is ground inside the AoR at that "
+                   "date that was outside it at the one before. That is "
+                   "precisely the area 40 CFR 146.84(e)(2) makes subject to "
+                   "artificial-penetration identification and corrective "
+                   "action at each re-evaluation.")
+
+        last = res.series[-1]
+        first = res.series[0]
+        st.info(
+            f"The AoR grows from {first.area_acres:,.0f} acres at year "
+            f"{first.year:,.0f} to {last.area_acres:,.0f} acres at year "
+            f"{last.year:,.0f}. Each snapshot is delineated from the "
+            "maximum-over-time fields up to that date, which is the AoR a "
+            "reviewer would approve if the project were evaluated then.")
+
+
 # ---------------------------------------------------------------- GIS map
-with tabs[1]:
+with T["GIS map"]:
     theme.lead(guide.LEAD["gis"])
     try:
         from aorpisc import gis
@@ -404,7 +530,7 @@ with tabs[1]:
         st.info(str(exc))
 
 # -------------------------------------------------------------- threshold
-with tabs[2]:
+with T["Threshold"]:
     theme.lead(guide.LEAD["threshold"])
     st.pyplot(viz.threshold_comparison(res.thresholds, res.selected_threshold))
     st.dataframe([t.summary() for t in res.thresholds], hide_index=True)
@@ -413,7 +539,7 @@ with tabs[2]:
                "mud_column assumes drilling mud still stands in the hole.")
 
 # ------------------------------------------------------------------- PISC
-with tabs[3]:
+with T["PISC"]:
     theme.lead(guide.LEAD["pisc"])
     if res.pisc is None:
         st.info("No PISC analysis for this run.")
@@ -437,7 +563,7 @@ with tabs[3]:
                              - project.usdw.base_depth)), hide_index=True)
 
 # ----------------------------------------------------- corrective action
-with tabs[4]:
+with T["Corrective action"]:
     theme.lead(guide.LEAD["corrective"])
     st.caption("Upload a CSV of artificial penetrations. Recognised columns: "
                "name, api, type, status, x, y, total_depth, year_drilled, "
@@ -491,7 +617,7 @@ with tabs[4]:
         st.info("No well list loaded yet.")
 
 # ------------------------------------------------------------ uncertainty
-with tabs[5]:
+with T["Uncertainty"]:
     theme.lead(guide.LEAD["uncertainty"])
     unc = res.uncertainty or {}
     if not unc:
@@ -515,7 +641,7 @@ with tabs[5]:
                      unc.get("percentile_ratio_to_base", {})})
 
 # ----------------------------------------------------------------- export
-with tabs[6]:
+with T["Export"]:
     theme.lead(guide.LEAD["export"])
     crs = None
     use_crs = st.checkbox("georeference the exports", help=H["georef"])
@@ -558,6 +684,6 @@ with tabs[6]:
                        "fields.npz", "application/octet-stream")
 
 # ------------------------------------------------------------------- help
-with tabs[7]:
+with T["Help"]:
     theme.lead(guide.LEAD["help"])
     guide.render()

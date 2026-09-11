@@ -1,0 +1,119 @@
+# ---------------------------------------------------------------------------
+# One wellbore, two injection zones
+#
+# A single well perforated in two formations separated by their own confining
+# intervals. This is not the same project as one well in a thicker single
+# zone, and it cannot be modelled as one: each zone sits at its own depth and
+# pressure, so CO2 has a different density in each, each gets its own
+# threshold pressure measured against the same USDW, and each spreads
+# differently because k, h and porosity differ.
+#
+# The toolkit runs the whole delineation once per zone and takes the
+# geometric union. The zone AoRs are reported separately behind it, because
+# the union is the number that goes in the permit and the per-zone areas are
+# what a reviewer asks to see behind it.
+#
+# The rate here is commingled: neither well row names a zone, so the 1.0 MMT
+# per year is split between the zones in proportion to flow capacity k*h.
+# To use a measured zonal allocation instead, give one well row per zone with
+# the same name and coordinates, each naming its zone and carrying its own
+# rate.
+#
+# Properties are a plausible stacked Frio section, not a specific site.
+# ---------------------------------------------------------------------------
+
+project:
+  name: Stacked Frio completion
+  operator: worked example
+  permit: n/a
+  datum: ground surface, depths positive downward
+  notes: >
+    Two-zone commingled completion. Rate allocation between zones is by k*h,
+    which is an assumption; state it, or replace it with a spinner or
+    distributed-temperature survey allocation.
+
+units:
+  length: ft
+  depth: ft
+  pressure: psi
+  temperature: F
+  permeability: mD
+  rate: MMT/yr
+  time: yr
+  compressibility: 1/psi
+
+formation:
+  injection_zones:
+    - name: Frio A
+      top_depth: 5200
+      thickness: 180
+      porosity: 0.20
+      permeability: 220
+      temperature: 140
+      salinity_ppm: 70000
+      initial_pressure: 2250
+      rock_compressibility: 5.0e-6
+      dip_degrees: 0.5
+      dip_azimuth: 180
+      confining_zone:
+        top_depth: 5000
+        base_depth: 5200
+
+    - name: Frio B
+      top_depth: 6000
+      thickness: 250
+      porosity: 0.18
+      permeability: 150
+      temperature: 150
+      salinity_ppm: 90000
+      initial_pressure: 2600
+      rock_compressibility: 5.0e-6
+      dip_degrees: 0.5
+      dip_azimuth: 180
+      confining_zone:
+        top_depth: 5700
+        base_depth: 6000
+
+  usdw:
+    base_depth: 1200
+    initial_pressure: 520
+    temperature: 80
+    salinity_ppm: 800
+
+relative_permeability:
+  model: brooks_corey
+  swr: 0.35
+  sgr: 0.20
+  krg0: 0.30
+  m: 3.0
+  n: 3.0
+
+threshold:
+  method: auto
+  mud_weight_ppg: 9.0
+  gel_strength: 10.0
+
+model:
+  engine: ve
+  boundary: infinite
+  end_year: 60
+  # 40 CFR 146.84(e) requires re-evaluation at least every five years; the
+  # AoR is delineated at each of these dates as well as at the end.
+  aor_reevaluation_years: 5
+  grid:
+    cell_size: 750
+    half_width: 79200
+
+plume:
+  cutoff: 0.01
+
+wells:
+  # No `zone` given, so this completion is open to both zones and the rate is
+  # split by k*h. Add `zone: Frio A` (and a second row for Frio B) to set the
+  # split explicitly.
+  - name: INJ-1
+    latitude: 31.9686
+    longitude: -99.9018
+    rate: 1.0
+    start_year: 0
+    stop_year: 20
