@@ -28,7 +28,7 @@ rough order of value:
 - **Regulatory text is quoted, not paraphrased**, and is marked with where it
   came from. Where the toolkit goes beyond what a regulation says, it says so.
 - **SI internally, permit units at the boundary.** Nothing downstream of
-  `aorpisc.units` should have to guess.
+  `containment.units` should have to guess.
 - **Warn rather than assume.** If a model choice can quietly produce a wrong
   AoR - a domain that is too small, a threshold method applied outside its
   regime, an absolute-pressure column read as buildup - the code should say
@@ -37,8 +37,8 @@ rough order of value:
 ## Development
 
 ```bash
-git clone https://github.com/Kouroshie/aor-pisc-toolkit
-cd aor-pisc-toolkit
+git clone https://github.com/Kouroshie/containment
+cd containment
 pip install -e ".[full,dev]"
 pytest
 ruff check src tests

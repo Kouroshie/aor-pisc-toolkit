@@ -158,7 +158,7 @@ figure img{background:#232321}}
 # ==========================================================================
 def build_html(result, *, include_figures: bool = True,
                title: str | None = None, theme: str = "light") -> str:
-    """Render a :class:`aorpisc.workflow.ProjectResult` as one HTML document."""
+    """Render a :class:`containment.workflow.ProjectResult` as one HTML document."""
     p = result.project
     s = result.summary()
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -271,7 +271,7 @@ def build_html(result, *, include_figures: bool = True,
         "<p class='sub'>Area of Review and Post-Injection Site Care analysis"
         + (f" - {html.escape(p.operator)}" if p.operator else "")
         + (f" - permit {html.escape(p.permit)}" if p.permit else "") + "</p>",
-        f"<p class='cite'>Generated {now} by aorpisc. Depth datum: "
+        f"<p class='cite'>Generated {now} by containment. Depth datum: "
         f"{html.escape(p.datum)}.</p>",
         "<div class='cards'>" + "".join(
             f"<div class='card'><span class='n'>{n}</span>"
@@ -500,7 +500,7 @@ def build_html(result, *, include_figures: bool = True,
         f"<pre>{html.escape(json.dumps(p.to_dict(), indent=2, default=str))}</pre></details>",
         "<details><summary>Full result summary (JSON)</summary>"
         f"<pre>{html.escape(json.dumps(_clean(s), indent=2, default=str))}</pre></details>",
-        "<footer>Produced with aorpisc - open-source Area of Review and "
+        "<footer>Produced with containment - open-source Area of Review and "
         "Post-Injection Site Care toolkit for UIC Class VI projects. "
         "This report is an engineering analysis, not a regulatory "
         "determination.</footer>",

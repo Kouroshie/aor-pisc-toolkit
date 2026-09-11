@@ -16,9 +16,9 @@ import copy
 import numpy as np
 import pytest
 
-from aorpisc import delineate, workflow
-from aorpisc import units as U
-from aorpisc.config import Project
+from containment import delineate, workflow
+from containment import units as U
+from containment.config import Project
 
 pytest.importorskip("shapely")
 
@@ -264,7 +264,7 @@ def test_stacked_and_single_zone_agree_when_the_zones_are_identical():
 def test_figures_render_for_a_stacked_run():
     matplotlib = pytest.importorskip("matplotlib")
     matplotlib.use("Agg")
-    from aorpisc import viz
+    from containment import viz
 
     res = workflow.run(_project())
     wells = [w for w in res.project.wells if w.kind == "injector"]
@@ -276,7 +276,7 @@ def test_figures_render_for_a_stacked_run():
 
 def test_plotly_figures_carry_a_slider_and_every_zone():
     pytest.importorskip("plotly")
-    from aorpisc import viz
+    from containment import viz
 
     res = workflow.run(_project())
     fig = viz.plotly_aor_series(res.series, wells=res.project.wells)

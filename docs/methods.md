@@ -7,7 +7,7 @@ UIC Program Class VI Well Area of Review Evaluation and Corrective Action
 Guidance*.
 
 Internally everything is SI (m, Pa, K, kg, s, m^2 for permeability). Inputs
-and outputs are converted at the boundary by `aorpisc.units`.
+and outputs are converted at the boundary by `containment.units`.
 
 ---
 
@@ -34,7 +34,7 @@ fluids may migrate beyond the extent of the pressure front."
 
 ---
 
-## 2. Fluid properties (`aorpisc.fluids`)
+## 2. Fluid properties (`containment.fluids`)
 
 ### CO2 density and viscosity
 
@@ -91,7 +91,7 @@ model.
 
 ---
 
-## 3. Threshold pressure (`aorpisc.threshold`)
+## 3. Threshold pressure (`containment.threshold`)
 
 The pressure front is not the edge of detectable pressure. It is
 
@@ -205,7 +205,7 @@ between methods is the largest discretionary lever in an AoR delineation.
 
 ---
 
-## 4. Relative permeability (`aorpisc.analytical.relperm`)
+## 4. Relative permeability (`containment.analytical.relperm`)
 
 Brooks-Corey / Corey power law on the normalised gas saturation:
 
@@ -239,7 +239,7 @@ sensitivity run rather than buried as constants.
 
 ---
 
-## 5. Analytical plume models (`aorpisc.analytical.plume`)
+## 5. Analytical plume models (`containment.analytical.plume`)
 
 All are injection-period, homogeneous, horizontal, constant-thickness,
 single-well models. They bracket the answer; they do not replace a gridded
@@ -310,7 +310,7 @@ it to judge whether a sharp-interface model is adequate.
 
 ---
 
-## 6. Analytical pressure (`aorpisc.analytical.pressure`)
+## 6. Analytical pressure (`containment.analytical.pressure`)
 
 ### Line source
 
@@ -370,7 +370,7 @@ Two details that matter:
 
 ---
 
-## 7. Vertical-equilibrium solver (`aorpisc.numerical.ve_solver`)
+## 7. Vertical-equilibrium solver (`containment.numerical.ve_solver`)
 
 ### Why VE
 
@@ -449,7 +449,7 @@ agreement improves with refinement. See `docs/validation.md`.
 
 ---
 
-## 8. Delineation (`aorpisc.delineate`)
+## 8. Delineation (`containment.delineate`)
 
 Fields are contoured with `contourpy` (matplotlib's contouring backend);
 nested rings are resolved by containment parity so a ring inside a ring
@@ -472,7 +472,7 @@ and corrective action procedures".
 
 ---
 
-## 9. Corrective action (`aorpisc.corrective`)
+## 9. Corrective action (`containment.corrective`)
 
 The EPA well-evaluation decision tree (Figure 4-3) is applied from record
 completeness, plugging depth, plug material, abandonment date and MIT
@@ -497,7 +497,7 @@ before the end of the injection phase.
 
 ---
 
-## 10. PISC (`aorpisc.pisc`)
+## 10. PISC (`containment.pisc`)
 
 Four quantitative arguments, all computed from the same model output that
 produced the AoR:
@@ -532,7 +532,7 @@ submitting.
 
 ---
 
-## 11. Uncertainty (`aorpisc.uncertainty`)
+## 11. Uncertainty (`containment.uncertainty`)
 
 `tornado()` is one-parameter-at-a-time. `monte_carlo()` is Latin-hypercube
 sampling over joint distributions (triangular, uniform, truncated normal,

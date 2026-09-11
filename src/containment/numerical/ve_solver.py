@@ -13,7 +13,7 @@ multi-well interference, residual trapping, and post-injection buoyant
 migration.
 
 That last item is the reason this solver exists.  The closed-form models in
-:mod:`aorpisc.analytical` stop at the end of injection.  EPA requires the
+:mod:`containment.analytical` stop at the end of injection.  EPA requires the
 model to run "until the plume movement ceases, until pressure differentials
 sufficient to cause the movement of injected fluids or formation fluids into
 a USDW are no longer present, or until the end of a fixed time period"

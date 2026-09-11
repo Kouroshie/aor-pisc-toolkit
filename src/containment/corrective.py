@@ -389,7 +389,7 @@ def load_wells_csv(path: str, *, x_col="x", y_col="y", name_col="name",
     Semicolon-separated plug depths in a ``plug_depths`` column are parsed.
 
     If the file has ``latitude`` and ``longitude`` columns and ``crs`` is a
-    :class:`aorpisc.io.exporters.LocalCRS`, those are used in preference to
+    :class:`containment.io.exporters.LocalCRS`, those are used in preference to
     ``x``/``y`` and converted into the model frame. State well lists come out
     of RRC, TWDB and commercial databases in latitude and longitude, so this
     is usually the path of least resistance.

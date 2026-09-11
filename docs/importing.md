@@ -6,7 +6,7 @@ need to take its output and re-delineate the AoR under different, explicitly
 stated assumptions: a different threshold pressure, a different saturation
 cutoff, a different time horizon, a different 3-D-to-map projection.
 
-That is what `aorpisc.io.importers` is for.
+That is what `containment.io.importers` is for.
 
 ---
 
@@ -40,7 +40,7 @@ x,y,layer,time,PRESSURE,SGAS
 ```
 
 ```bash
-aorpisc import sim_export.csv \
+containment import sim_export.csv \
     --x-col x --y-col y --time-col time \
     --dp-col PRESSURE --absolute-pressure --initial-pressure 2481 \
     --plume-col SGAS --plume-cutoff 0.01 \
@@ -51,8 +51,8 @@ aorpisc import sim_export.csv \
 ```
 
 ```python
-from aorpisc.io import importers
-from aorpisc import delineate, units as U
+from containment.io import importers
+from containment import delineate, units as U
 
 sim = importers.load_grid_csv(
     "sim_export.csv",
@@ -132,13 +132,13 @@ This is for static property arrays. For dynamic results, export a CSV.
 ## Fast interchange
 
 ```python
-from aorpisc.io import exporters, importers
+from containment.io import exporters, importers
 
 exporters.save_npz("fields.npz", x, y, times, dp=dp, plume=plume)
 sim = importers.load_field_npz("fields.npz")
 ```
 
-`aorpisc run -o out/` writes one of these for every run. It is the right way
+`containment run -o out/` writes one of these for every run. It is the right way
 to hand a large model to somebody else, and it is what the field archive in
 the report's input record refers to.
 
@@ -150,8 +150,8 @@ The importer gives you fields; everything downstream works the same way.
 
 ```python
 import numpy as np
-from aorpisc import corrective, delineate, pisc, units as U
-from aorpisc.io import importers
+from containment import corrective, delineate, pisc, units as U
+from containment.io import importers
 
 sim = importers.load_grid_csv("sim.csv", dp_col="DP", plume_col="SGAS",
                               length_unit="ft", pressure_unit="psi")

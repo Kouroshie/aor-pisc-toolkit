@@ -1,8 +1,10 @@
-# aorpisc - Area of Review & Post-Injection Site Care toolkit
+# Containment
 
-Open-source Python toolkit for delineating the **Area of Review (AoR)** and
-building the **Post-Injection Site Care (PISC)** demonstration for UIC
-**Class VI** geologic carbon storage projects, following
+Open-source Python toolkit for the three technical demonstrations behind a UIC
+**Class VI** permit: delineating the **Area of Review (AoR)**, sizing the
+**corrective-action** list for artificial penetrations, and testing a
+**post-injection site care (PISC)** timeframe. For geologic carbon storage
+projects, following
 [40 CFR 146.84 / 146.93](https://www.ecfr.gov/current/title-40/chapter-I/subchapter-D/part-146/subpart-H)
 and EPA's *Class VI Well Area of Review Evaluation and Corrective Action
 Guidance* ([816-R-13-005](https://www.epa.gov/uic/class-vi-guidance-documents), May 2013).
@@ -10,8 +12,8 @@ Guidance* ([816-R-13-005](https://www.epa.gov/uic/class-vi-guidance-documents), 
 It runs as a Python library, a command-line tool, and a browser app.
 
 ```bash
-pip install "aorpisc[full]"
-aorpisc run examples/epa_hypothetical_site.yaml -o out/
+pip install "containment[full]"
+containment run examples/epa_hypothetical_site.yaml -o out/
 ```
 
 ---
@@ -43,7 +45,7 @@ superposition of pressure buildup). But EASiTool is a **storage-capacity and
 well-optimisation** tool, not an AoR tool. The differences that matter for a
 Class VI permit:
 
-| | EASiTool v4 | aorpisc |
+| | EASiTool v4 | containment |
 |---|---|---|
 | Purpose | storage capacity, optimal well count and rates, NPV | AoR delineation, corrective action, PISC demonstration |
 | Threshold pressure | not computed | four EPA/TCEQ methods, compared, with regime checks |
@@ -71,28 +73,28 @@ operator's own numbers under different assumptions in seconds.
 
 ```bash
 # full workflow: threshold, model, AoR, corrective action, PISC, HTML report
-aorpisc run examples/epa_hypothetical_site.yaml -o out/
+containment run examples/epa_hypothetical_site.yaml -o out/
 
 # just the threshold pressure, every method, with its inputs and citations
-aorpisc threshold examples/epa_hypothetical_site.yaml
+containment threshold examples/epa_hypothetical_site.yaml
 
 # re-delineate an AoR from somebody else's simulator output
-aorpisc import sim_export.csv --dp-col PRESSURE --absolute-pressure \
+containment import sim_export.csv --dp-col PRESSURE --absolute-pressure \
     --initial-pressure 2481 --plume-col SGAS --plume-cutoff 0.01 \
     --threshold 313 --length-unit ft -o aor.geojson
 
 # AoR reevaluation: difference two delineations [40 CFR 146.84(e)]
-aorpisc reevaluate year0.yaml year5.yaml -o out/
+containment reevaluate year0.yaml year5.yaml -o out/
 
 # browser app
-aorpisc app
+containment app
 ```
 
 ### Python
 
 ```python
-from aorpisc.config import Project
-from aorpisc import workflow, report
+from containment.config import Project
+from containment import workflow, report
 
 project = Project.from_yaml("my_site.yaml")
 result  = workflow.run(project)
@@ -105,7 +107,7 @@ report.write_html(result, "aor_report.html")
 ### Threshold pressure on its own
 
 ```python
-from aorpisc import threshold, fluids, units as U
+from containment import threshold, fluids, units as U
 
 results = threshold.compare_methods(
     p_usdw=U.pressure(289, "psi"),
@@ -353,7 +355,7 @@ requires no Python install on their side:
 1. sign in at <https://share.streamlit.io> with the GitHub account that owns
    this repository;
 2. **Create app** -> **Deploy a public app from GitHub**;
-3. repository `Kouroshie/aor-pisc-toolkit`, branch `main`, main file path
+3. repository `Kouroshie/containment`, branch `main`, main file path
    `app/streamlit_app.py`;
 4. **Deploy**.
 

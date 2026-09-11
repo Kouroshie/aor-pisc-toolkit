@@ -1,4 +1,4 @@
-"""Assert that a completed `aorpisc run` produced a sane result.
+"""Assert that a completed `containment run` produced a sane result.
 
 Used by CI as a smoke test on the shipped example. Kept as a checked-in file
 rather than an inline heredoc because the CI matrix includes Windows runners,

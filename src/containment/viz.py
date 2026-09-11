@@ -68,7 +68,7 @@ def palette(theme: str = "light") -> dict:
     return DARK if str(theme).lower() == "dark" else LIGHT
 
 
-def _sequential_cmap(theme: str = "light", name: str = "aorpisc_seq"):
+def _sequential_cmap(theme: str = "light", name: str = "containment_seq"):
     from matplotlib.colors import LinearSegmentedColormap
 
     p = palette(theme)
@@ -85,7 +85,7 @@ def _diverging_cmap(theme: str = "light"):
 
     p = palette(theme)
     return LinearSegmentedColormap.from_list(
-        "aorpisc_div", [p["div_low"], p["div_mid"], p["div_high"]])
+        "containment_div", [p["div_low"], p["div_mid"], p["div_high"]])
 
 
 def _style(ax, theme: str, xlabel="", ylabel="", title=""):

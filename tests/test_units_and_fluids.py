@@ -4,8 +4,8 @@
 import numpy as np
 import pytest
 
-from aorpisc import fluids
-from aorpisc import units as U
+from containment import fluids
+from containment import units as U
 
 
 # ==========================================================================

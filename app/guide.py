@@ -395,8 +395,8 @@ def render() -> None:
     st.markdown("### Running it yourself")
     st.markdown(
         "The whole toolkit is open source under Apache-2.0 at "
-        "[github.com/Kouroshie/aor-pisc-toolkit]"
-        "(https://github.com/Kouroshie/aor-pisc-toolkit). "
-        "`pip install aorpisc` gives you the same engines behind a CLI "
-        "(`aorpisc run project.yaml`), which is the route to take for large "
+        "[github.com/Kouroshie/containment]"
+        "(https://github.com/Kouroshie/containment). "
+        "`pip install containment` gives you the same engines behind a CLI "
+        "(`containment run project.yaml`), which is the route to take for large "
         "domains, batch runs, or anything that should not leave your network.")

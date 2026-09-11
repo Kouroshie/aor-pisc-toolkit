@@ -1,10 +1,10 @@
 """Command-line interface.
 
-    aorpisc run project.yaml -o out/            # full AoR + PISC + report
-    aorpisc threshold project.yaml              # threshold pressure, all methods
-    aorpisc reevaluate before.yaml after.yaml   # AoR reevaluation difference
-    aorpisc import sim.csv --dp-col PRES ...    # re-delineate somebody's model
-    aorpisc app                                 # launch the browser app
+    containment run project.yaml -o out/            # full AoR + PISC + report
+    containment threshold project.yaml              # threshold pressure, all methods
+    containment reevaluate before.yaml after.yaml   # AoR reevaluation difference
+    containment import sim.csv --dp-col PRES ...    # re-delineate somebody's model
+    containment app                                 # launch the browser app
 """
 
 from __future__ import annotations
@@ -228,9 +228,10 @@ def cmd_app(args) -> int:
 # ==========================================================================
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        prog="aorpisc",
-        description="Area of Review and Post-Injection Site Care toolkit for "
-                    "UIC Class VI geologic carbon storage projects.")
+        prog="containment",
+        description="The technical demonstrations behind a UIC Class VI "
+                    "permit: Area of Review, corrective action and "
+                    "post-injection site care.")
     sub = ap.add_subparsers(dest="command", required=True)
 
     r = sub.add_parser("run", help="run the full AoR + PISC workflow")
@@ -287,9 +288,9 @@ def main(argv=None) -> int:
         return 130
     except Exception as exc:
         _p(f"error: {exc}")
-        if os.environ.get("AORPISC_TRACEBACK"):
+        if os.environ.get("CONTAINMENT_TRACEBACK"):
             raise
-        _p("(set AORPISC_TRACEBACK=1 for a full traceback)")
+        _p("(set CONTAINMENT_TRACEBACK=1 for a full traceback)")
         return 1
 
 

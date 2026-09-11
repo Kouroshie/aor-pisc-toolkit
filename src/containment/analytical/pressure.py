@@ -36,7 +36,7 @@ Limitations, stated plainly
 ---------------------------
 Homogeneous, isotropic, constant-thickness, isothermal, single-layer, and
 slightly compressible.  Heterogeneity, dip, faults and layering need
-:mod:`aorpisc.numerical.ve_solver` or an imported operator simulation.  EPA
+:mod:`containment.numerical.ve_solver` or an imported operator simulation.  EPA
 816-R-13-005 Section 2.3.2 says analytical models "may be used to complement
 numerical modeling efforts" and as "a relatively simple comparative check on
 numerical modeling results" -- that is exactly the role intended here.

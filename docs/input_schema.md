@@ -9,7 +9,7 @@ Values are written in whatever units the permit uses. They are converted to SI
 once, on the way in.
 
 ```python
-from aorpisc.config import Project
+from containment.config import Project
 project = Project.from_yaml("my_site.yaml")
 print(project.warnings)      # read these before you trust anything
 ```

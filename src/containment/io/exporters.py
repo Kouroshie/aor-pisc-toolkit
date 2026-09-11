@@ -190,10 +190,10 @@ def to_geojson(result, crs: LocalCRS | None = None,
             "geometry": mapping(g),
         })
     fc = {"type": "FeatureCollection", "features": feats,
-          "aorpisc": {"crs": (crs.describe() if crs else {"kind": "none"}),
+          "containment": {"crs": (crs.describe() if crs else {"kind": "none"}),
                       "summary": result.summary()}}
     if crs is not None and crs.exact is False and crs.origin_lon is not None:
-        fc["aorpisc"]["warning"] = (
+        fc["containment"]["warning"] = (
             "coordinates were converted with a local tangent-plane "
             "approximation; install pyproj and supply an EPSG code for a "
             "survey-grade transform")

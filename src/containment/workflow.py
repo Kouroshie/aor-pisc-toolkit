@@ -467,8 +467,8 @@ def run_zone(p: Project, *, penetrations: list | None = None,
     else:
         raise ValueError(
             f"engine {p.engine!r} is not run by this function; import the "
-            "simulation with aorpisc.io.load_grid_csv and call "
-            "aorpisc.delineate.delineate directly")
+            "simulation with containment.io.load_grid_csv and call "
+            "containment.delineate.delineate directly")
 
     say("delineating the AoR")
     plume_level = (p.plume_cutoff if p.engine == "ve" else 0.5)

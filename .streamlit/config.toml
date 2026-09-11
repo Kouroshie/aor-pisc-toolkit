@@ -1,4 +1,4 @@
-# Theme for the hosted app. The palette matches aorpisc.viz so figures rendered
+# Theme for the hosted app. The palette matches containment.viz so figures rendered
 # in the page sit on the same surface colour as the page itself.
 [theme]
 base = "light"

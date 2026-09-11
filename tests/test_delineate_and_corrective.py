@@ -5,9 +5,9 @@ import json
 import numpy as np
 import pytest
 
-from aorpisc import corrective, delineate
-from aorpisc import units as U
-from aorpisc.io import exporters
+from containment import corrective, delineate
+from containment import units as U
+from containment.io import exporters
 
 
 def _radial_field(x, y, radius, peak=1.0, cx=0.0, cy=0.0):
@@ -294,7 +294,7 @@ def test_epsg_crs_is_exact():
 
 
 def test_save_and_reload_npz(tmp_path):
-    from aorpisc.io import importers
+    from containment.io import importers
 
     x = np.linspace(0, 1000, 11)
     y = np.linspace(0, 2000, 21)

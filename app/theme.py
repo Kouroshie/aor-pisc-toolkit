@@ -1,6 +1,6 @@
 """Visual theme for the browser app.
 
-The palette is not invented here: it is read from :mod:`aorpisc.viz`, so the
+The palette is not invented here: it is read from :mod:`containment.viz`, so the
 page chrome and the figures drawn into it are one system rather than two that
 happen to sit next to each other.  Only the page furniture lives in this
 module; figure styling stays in ``viz``.
@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from aorpisc import viz
+from containment import viz
 
 _UI = "'Source Sans', 'Segoe UI', system-ui, -apple-system, sans-serif"
 _DISPLAY = "'Source Serif', Georgia, 'Times New Roman', serif"

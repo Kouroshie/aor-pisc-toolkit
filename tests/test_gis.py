@@ -5,10 +5,10 @@ import math
 import numpy as np
 import pytest
 
-from aorpisc import delineate, gis
-from aorpisc import units as U
-from aorpisc.config import Project
-from aorpisc.io.exporters import HAVE_PYPROJ, LocalCRS
+from containment import delineate, gis
+from containment import units as U
+from containment.config import Project
+from containment.io.exporters import HAVE_PYPROJ, LocalCRS
 
 WELLS_LATLON = [
     {"name": "INJ-1", "latitude": 31.9686, "longitude": -99.9018,
@@ -135,7 +135,7 @@ def test_map_places_the_polygon_at_the_right_place():
 
 @pytest.mark.skipif(not gis.HAVE_FOLIUM, reason="folium not installed")
 def test_penetrations_are_grouped_by_action():
-    from aorpisc import corrective
+    from containment import corrective
 
     p = _project()
     ctx = gis.MapContext.from_project(p)
@@ -180,7 +180,7 @@ def test_local_crs_inverse_round_trip():
 
 
 def test_penetration_csv_reads_latlon(tmp_path):
-    from aorpisc import corrective
+    from containment import corrective
 
     path = tmp_path / "w.csv"
     path.write_text("name,latitude,longitude,total_depth\n"
@@ -205,7 +205,7 @@ def test_foot_based_crs_is_converted_to_metres():
     inflate every distance by 3.28 and every area by 10.8, and nothing else in
     the toolkit would notice.
     """
-    from aorpisc.io.exporters import _axis_metres
+    from containment.io.exporters import _axis_metres
 
     assert _axis_metres(32064) == pytest.approx(0.3048006, abs=1e-6)
     assert _axis_metres(2278) == pytest.approx(0.3048006, abs=1e-6)   # TX SP S Central
@@ -328,7 +328,7 @@ def test_map_does_not_paint_out_a_coincident_component():
 
 
 def test_static_and_plotly_maps_also_dash_a_coincident_aor():
-    from aorpisc import viz
+    from containment import viz
 
     r = _nested()
     fig = viz.aor_map(r)

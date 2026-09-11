@@ -516,7 +516,7 @@ def alternative_timeframe_checklist(result: PISCResult, *,
         "v": (True, "estimated values are flagged in the input record; run the "
                     "uncertainty module to bound them"),
         "vi": (sensitivity_analysis_done,
-               "run aorpisc.uncertainty for tornado and Monte Carlo results"),
+               "run containment.uncertainty for tornado and Monte Carlo results"),
         "vii": (qa_plan, "requires an approved QASP"),
         "viii": (False, "ask the Director"),
     }

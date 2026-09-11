@@ -5,10 +5,10 @@ import os
 import numpy as np
 import pytest
 
-from aorpisc import pisc, uncertainty
-from aorpisc import units as U
-from aorpisc.config import Project
-from aorpisc.io import importers
+from containment import pisc, uncertainty
+from containment import units as U
+from containment.config import Project
+from containment.io import importers
 
 EXAMPLES = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples")
 
@@ -283,7 +283,7 @@ def test_default_output_times_land_on_rate_changes():
 
 @pytest.mark.slow
 def test_end_to_end_analytical_run():
-    from aorpisc import workflow
+    from containment import workflow
 
     p = Project.from_dict({
         "project": {"name": "smoke"},
@@ -348,7 +348,7 @@ def test_threshold_datum_is_configurable():
     assert U.length_out(top.threshold_depth, "ft") == pytest.approx(5862.0)
     assert U.length_out(exp.threshold_depth, "ft") == pytest.approx(5862.0)
 
-    from aorpisc import workflow
+    from containment import workflow
     dp_mid = workflow.run(mid).selected_threshold.delta_p_psi
     dp_top = workflow.run(top).selected_threshold.delta_p_psi
     assert dp_mid > dp_top

@@ -427,7 +427,7 @@ def compare_methods(p_usdw: float, p_inj: float,
                     ) -> list[ThresholdResult]:
     """Run every threshold method on one site and return them in a list.
 
-    Fluid densities are computed from :mod:`aorpisc.fluids` at the stated
+    Fluid densities are computed from :mod:`containment.fluids` at the stated
     in-situ conditions.  ``salinity_*`` are NaCl mass fractions.
     ``mud_datum_depth`` defaults to ``depth_inj``.
     """

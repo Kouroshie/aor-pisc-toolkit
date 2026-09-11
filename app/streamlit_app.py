@@ -1,8 +1,8 @@
-"""Browser front end for the AoR / PISC toolkit.
+"""Browser front end for the Containment.
 
-    streamlit run app/streamlit_app.py      (or: aorpisc app)
+    streamlit run app/streamlit_app.py      (or: containment app)
 
-Everything the app does goes through :mod:`aorpisc.workflow`, so what you see
+Everything the app does goes through :mod:`containment.workflow`, so what you see
 here is exactly what the CLI and the report produce.  The app is a way to turn
 the knobs and watch the AoR move; the project YAML remains the record of what
 was actually run.
@@ -31,13 +31,13 @@ sys.path.insert(0, _HERE)
 import guide  # noqa: E402  (sibling module: help text)
 import theme  # noqa: E402  (sibling module: page styling)
 
-from aorpisc import delineate, report, viz, workflow  # noqa: E402
-from aorpisc import pisc as pisc_mod  # noqa: E402
-from aorpisc import units as U  # noqa: E402
-from aorpisc.config import Project  # noqa: E402
-from aorpisc.io import exporters  # noqa: E402
+from containment import delineate, report, viz, workflow  # noqa: E402
+from containment import pisc as pisc_mod  # noqa: E402
+from containment import units as U  # noqa: E402
+from containment.config import Project  # noqa: E402
+from containment.io import exporters  # noqa: E402
 
-st.set_page_config(page_title="AoR / PISC toolkit", page_icon="*",
+st.set_page_config(page_title="Containment", page_icon="*",
                    layout="wide", initial_sidebar_state="expanded")
 theme.apply()
 
@@ -72,7 +72,7 @@ def _embed_html(html: str, height: int = 640) -> None:
             1)
         d = st.session_state.get("_embed_dir")
         if d is None:
-            d = st.session_state["_embed_dir"] = tempfile.mkdtemp(prefix="aorpisc-")
+            d = st.session_state["_embed_dir"] = tempfile.mkdtemp(prefix="containment-")
         path = pathlib.Path(d) / (
             hashlib.sha1(doc.encode("utf-8")).hexdigest()[:16] + ".html")
         if not path.exists():
@@ -306,9 +306,10 @@ def _well_editor(zones: list[dict] | None = None) -> list[dict]:
 
 # ==========================================================================
 theme.hero(
-    "Area of Review and Post-Injection Site Care",
-    "Delineate the AoR, size the corrective-action list and test a PISC "
-    "timeframe, from a project you can hand to a reviewer and rerun.",
+    "Containment",
+    "Delineate the Area of Review, size the corrective-action list and test a "
+    "post-injection site care timeframe, from a project you can hand to a "
+    "reviewer and rerun.",
     ("40 CFR 146.84 / 146.93", "EPA 816-R-13-005",
      "Engineering analysis, not a regulatory determination"))
 
@@ -551,7 +552,7 @@ with T["AoR over time"]:
 with T["GIS map"]:
     theme.lead(guide.LEAD["gis"])
     try:
-        from aorpisc import gis
+        from containment import gis
 
         ctx = gis.MapContext.from_project(project)
         c1, c2 = st.columns([2, 3])
@@ -624,7 +625,7 @@ with T["Corrective action"]:
     if up is not None:
         import tempfile
 
-        from aorpisc import corrective
+        from containment import corrective
 
         with tempfile.NamedTemporaryFile("wb", suffix=".csv", delete=False) as fh:
             fh.write(up.getvalue())
@@ -713,7 +714,7 @@ with T["Export"]:
     st.download_button("AoR KML", exporters.to_kml(res.aor, crs),
                        "aor.kml", "application/vnd.google-earth.kml+xml")
     st.download_button("Full HTML report", report.build_html(res),
-                       "aor_pisc_report.html", "text/html")
+                       "containment_report.html", "text/html")
     st.download_button("Result summary (JSON)",
                        json.dumps(report._clean(s), indent=2, default=str),
                        "summary.json", "application/json")

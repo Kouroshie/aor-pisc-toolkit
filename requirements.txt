@@ -2,7 +2,7 @@
 #
 # Streamlit Cloud installs from this file, not from pyproject.toml, so the two
 # are kept deliberately in step. pyproject.toml remains the source of truth for
-# `pip install aorpisc`; this file exists only so the hosted app builds.
+# `pip install containment`; this file exists only so the hosted app builds.
 #
 # The app adds ./src to sys.path itself, so the package does not need to be
 # pip-installed in the hosted environment.

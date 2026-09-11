@@ -69,7 +69,7 @@ BASEMAPS = {
         attr="Esri", name="Shaded relief"),
 }
 
-# Matches aorpisc.viz: pressure front blue, plume orange, AoR ink.
+# Matches containment.viz: pressure front blue, plume orange, AoR ink.
 STYLE = {
     "aor": dict(color="#0b0b0b", weight=4, fill=False, dashArray=None),
     "plume": dict(color="#eb6834", weight=2.5, fill=True, fillOpacity=0.25),
@@ -87,7 +87,7 @@ def _require():
     if not HAVE_FOLIUM:
         raise ImportError(
             "folium is required for the GIS map; install with "
-            "`pip install folium` or `pip install aorpisc[gis]`")
+            "`pip install folium` or `pip install containment[gis]`")
 
 
 # ==========================================================================
@@ -213,10 +213,10 @@ def build_map(result, ctx: MapContext, *, wells=None, penetrations=None,
               extra_geojson: dict | None = None, zoom_padding: float = 0.12):
     """Build a folium map of the AoR, its components, and the wells.
 
-    ``result`` is an :class:`aorpisc.delineate.AoRResult`; ``wells`` a list of
+    ``result`` is an :class:`containment.delineate.AoRResult`; ``wells`` a list of
     project wells with ``x``/``y``/``name``; ``penetrations`` a
-    :class:`aorpisc.corrective.CorrectiveActionPlan` or a list of
-    :class:`aorpisc.corrective.ArtificialPenetration`.
+    :class:`containment.corrective.CorrectiveActionPlan` or a list of
+    :class:`containment.corrective.ArtificialPenetration`.
     """
     _require()
     centre = _bounds(ctx, result.aor, result.plume, result.pressure_front)

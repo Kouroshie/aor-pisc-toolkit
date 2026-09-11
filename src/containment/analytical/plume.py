@@ -23,7 +23,7 @@ constant-thickness formation with a fully penetrating vertical injector:
 All three are **injection-period** models.  EPA requires the AoR to cover the
 maximum extent over the whole simulation, including post-injection buoyant
 migration, and none of these closed forms carries buoyant spreading after
-shut-in.  Use :mod:`aorpisc.numerical.ve_solver` for the post-injection
+shut-in.  Use :mod:`containment.numerical.ve_solver` for the post-injection
 period, or bound it with :func:`residual_trapping_limit_radius`.
 
 References

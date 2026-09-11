@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aorpisc"
+name = "containment"
 version = "0.1.0"
 description = "Open-source Area of Review (AoR) and Post-Injection Site Care (PISC) toolkit for UIC Class VI geologic carbon storage"
 readme = "README.md"
@@ -47,13 +47,13 @@ full = ["streamlit>=1.30", "plotly>=5.18", "pandas>=2.0", "pyproj>=3.5",
 dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.4"]
 
 [project.urls]
-Homepage = "https://github.com/Kouroshie/aor-pisc-toolkit"
-Repository = "https://github.com/Kouroshie/aor-pisc-toolkit"
-Issues = "https://github.com/Kouroshie/aor-pisc-toolkit/issues"
-Documentation = "https://github.com/Kouroshie/aor-pisc-toolkit/tree/main/docs"
+Homepage = "https://github.com/Kouroshie/containment"
+Repository = "https://github.com/Kouroshie/containment"
+Issues = "https://github.com/Kouroshie/containment/issues"
+Documentation = "https://github.com/Kouroshie/containment/tree/main/docs"
 
 [project.scripts]
-aorpisc = "aorpisc.cli:main"
+containment = "containment.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

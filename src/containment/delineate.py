@@ -39,7 +39,7 @@ def _require_shapely():
     if not HAVE_SHAPELY:
         raise ImportError(
             "shapely is required for AoR delineation; install with "
-            "`pip install shapely` or `pip install aorpisc[full]`"
+            "`pip install shapely` or `pip install containment[full]`"
         ) from _SHAPELY_ERR
 
 
@@ -321,7 +321,7 @@ def delineate(x: np.ndarray, y: np.ndarray, *,
     dp_field
         Maximum-over-time pressure **increase** field (Pa), shape ``(ny, nx)``.
     threshold_pressure
-        The ``dP_c`` from :mod:`aorpisc.threshold`, in Pa.
+        The ``dP_c`` from :mod:`containment.threshold`, in Pa.
     plume_field
         Maximum-over-time plume indicator, e.g. CO2 column thickness (m) or
         column-averaged saturation.  Contoured at ``plume_level``.
@@ -351,7 +351,7 @@ def delineate(x: np.ndarray, y: np.ndarray, *,
         if threshold_pressure <= 0:
             warnings.append(
                 "threshold pressure is not positive, so no pressure front was "
-                "delineated; see aorpisc.threshold")
+                "delineated; see containment.threshold")
         else:
             press_poly = field_to_polygons(x, y, dp_field, threshold_pressure, min_area)
             if press_poly.is_empty:

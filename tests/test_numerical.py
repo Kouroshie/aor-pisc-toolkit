@@ -3,11 +3,11 @@
 import numpy as np
 import pytest
 
-from aorpisc import fluids
-from aorpisc import units as U
-from aorpisc.analytical import BrooksCorey, NordbottenCeliaPlume, PlumeInputs
-from aorpisc.numerical import Grid, GridProperties, VESolver, VEWell
-from aorpisc.numerical.grid import lognormal_permeability
+from containment import fluids
+from containment import units as U
+from containment.analytical import BrooksCorey, NordbottenCeliaPlume, PlumeInputs
+from containment.numerical import Grid, GridProperties, VESolver, VEWell
+from containment.numerical.grid import lognormal_permeability
 
 
 @pytest.fixture(scope="module")

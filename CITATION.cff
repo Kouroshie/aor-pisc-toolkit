@@ -1,11 +1,11 @@
 cff-version: 1.2.0
-title: "aorpisc: Area of Review and Post-Injection Site Care toolkit for UIC Class VI geologic carbon storage"
+title: "Containment: Area of Review, corrective action and post-injection site care for UIC Class VI geologic carbon storage"
 message: "If you use this software, please cite it as below, together with the underlying sources it implements."
 type: software
 authors:
   - family-names: Mahjour
     given-names: Seyed
-repository-code: "https://github.com/Kouroshie/aor-pisc-toolkit"
+repository-code: "https://github.com/Kouroshie/containment"
 license: Apache-2.0
 version: 0.1.0
 keywords:

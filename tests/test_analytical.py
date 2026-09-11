@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 from scipy.special import exp1
 
-from aorpisc import fluids
-from aorpisc import units as U
-from aorpisc.analytical import (
+from containment import fluids
+from containment import units as U
+from containment.analytical import (
     AquiferModel,
     Boundary,
     BrooksCorey,
@@ -21,7 +21,7 @@ from aorpisc.analytical import (
     fractional_flow,
     radius_of_investigation,
 )
-from aorpisc.analytical.plume import residual_trapping_limit_radius
+from containment.analytical.plume import residual_trapping_limit_radius
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ def test_buckley_leverett_shock_is_a_tangent(state):
     bl = BuckleyLeverett(rp, inp.mu_co2, inp.mu_brine)
     assert rp.sgr < bl.shock_saturation < 1.0 - rp.swr
     # Welge: the chord slope at the shock equals the local derivative
-    from aorpisc.analytical.relperm import dfg_dsg
+    from containment.analytical.relperm import dfg_dsg
     local = float(dfg_dsg(np.array([bl.shock_saturation]), rp,
                           inp.mu_co2, inp.mu_brine)[0])
     assert local == pytest.approx(bl.shock_slope, rel=0.03)

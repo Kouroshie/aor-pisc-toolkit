@@ -222,7 +222,7 @@ def load_field_npz(path: str) -> SimulationImport:
 
     Expected keys: ``x`` (m), ``y`` (m), ``times`` (s), and any of ``dp`` (Pa)
     and ``plume``, each ``(nt, ny, nx)``.  This is the fastest interchange
-    format for a large model and is what :func:`aorpisc.io.exporters.save_npz`
+    format for a large model and is what :func:`containment.io.exporters.save_npz`
     writes.
     """
     z = np.load(path)

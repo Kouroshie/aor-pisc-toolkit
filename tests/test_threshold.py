@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from aorpisc import fluids, threshold
-from aorpisc import units as U
+from containment import fluids, threshold
+from containment import units as U
 
 
 # ==========================================================================
@@ -122,8 +122,8 @@ def test_recommended_picks_smallest_applicable():
 
 def test_smaller_threshold_is_the_protective_one():
     """A smaller allowable increase must produce a larger pressure front."""
-    from aorpisc.analytical import AquiferModel
-    from aorpisc.analytical.pressure import radius_of_investigation
+    from containment.analytical import AquiferModel
+    from containment.analytical.pressure import radius_of_investigation
 
     fs = fluids.evaluate(U.pressure(2500, "psi"), U.temperature(140, "F"), 0.06)
     m = AquiferModel(U.permeability(100, "mD"), U.length(150, "ft"), 0.2,
