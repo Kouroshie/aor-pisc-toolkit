@@ -36,20 +36,13 @@ jobs:
       - name: Test
         run: pytest -q --cov=aorpisc --cov-report=term-missing
 
+      # The matrix includes Windows, where the default shell is PowerShell,
+      # so the assertions live in a checked-in script rather than a heredoc.
       - name: Run the shipped example end to end
         run: |
           aorpisc threshold examples/epa_hypothetical_site.yaml
           aorpisc run examples/epa_hypothetical_site.yaml -o ci-out
-          python - <<'PY'
-          import json, os
-          with open(os.path.join("ci-out", "epa_hypothetical_site_summary.json")) as fh:
-              s = json.load(fh)
-          area = s["aor"]["aor_area_acres"]
-          assert area > 0, "the example produced an empty AoR"
-          assert s["threshold"]["delta_p_critical_psi"] > 0
-          assert s["pisc"]["peak_plume_area_acres"] > 0
-          print(f"example AoR: {area:,.0f} acres")
-          PY
+          python scripts/check_example_output.py ci-out/epa_hypothetical_site_summary.json
 
       - name: Upload example outputs
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
