@@ -16,3 +16,9 @@ out/
 .DS_Store
 .idea/
 .vscode/
+
+# stray export artefacts from a local run
+aor.shp
+aor.dbf
+aor.shx
+aor.prj

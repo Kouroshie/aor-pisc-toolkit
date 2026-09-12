@@ -11,14 +11,16 @@ passes is not telling you much.
 
 ## 1. Threshold pressure against a published Class VI application
 
-The a published Class VI applicant AoR and Corrective Action Plan states its
-Method 1 inputs and its answers in the same table. Feeding its inputs back in
-must reproduce its numbers.
+A published Class VI AoR and Corrective Action Plan states its Method 1
+inputs and its answers in the same table. Feeding its inputs back in must
+reproduce its numbers. The applicant, facility and well names are not
+reproduced here; only the arithmetic is, because only the arithmetic is what
+is being checked.
 
-| well | storage formation | inputs from the plan | plan's answer | toolkit |
-|---|---|---|---|---|
-| the first injector | the upper storage formation | `P_u` 289 psi, `rho_i` 69.5 lb/ft3, `z_u` 1,217 ft, `z_i` 5,862 ft, `P_i` 1,817 psi | 714 psi | **713.4 psi** |
-| the second injector | the lower storage formation | `P_u` 289 psi, `rho_i` 66.8 lb/ft3, `z_u` 1,217 ft, `z_i` 8,076 ft, `P_i` 2,881 psi | 590 psi | **589.6 psi** |
+| well | inputs from the plan | plan's answer | toolkit |
+|---|---|---|---|
+| first injector | `P_u` 289 psi, `rho_i` 69.5 lb/ft3, `z_u` 1,217 ft, `z_i` 5,862 ft, `P_i` 1,817 psi | 714 psi | **713.4 psi** |
+| second injector | `P_u` 289 psi, `rho_i` 66.8 lb/ft3, `z_u` 1,217 ft, `z_i` 8,076 ft, `P_i` 2,881 psi | 590 psi | **589.6 psi** |
 
 Both agree to better than 1 psi, which is the rounding in the published table.
 

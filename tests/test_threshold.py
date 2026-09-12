@@ -9,13 +9,14 @@ from containment import units as U
 
 # ==========================================================================
 def test_method1_reproduces_published_class_vi_value():
-    """a published Class VI applicant, the first injector (the upper storage formation).
+    """First injector of a published Class VI application.
 
     Inputs are taken verbatim from the published AoR and Corrective Action
     Plan's own input table: USDW pressure 289 psi, storage-formation fluid
     density 69.5 lb/ft3, USDW depth 1,217 ft, injection depth 5,862 ft,
     initial storage-formation pressure 1,817 psi.  The plan reports a
-    threshold of 714 psi.
+    threshold of 714 psi.  The applicant is not named here; the arithmetic is
+    the whole point of the check.
     """
     r = threshold.method1_thornhill(
         p_usdw=U.pressure(289, "psi"),
@@ -29,7 +30,7 @@ def test_method1_reproduces_published_class_vi_value():
 
 
 def test_method1_second_published_value():
-    """Same plan, the second injector (the lower storage formation): reported 590 psi."""
+    """Same plan, second injector: reported 590 psi."""
     r = threshold.method1_thornhill(
         p_usdw=U.pressure(289, "psi"),
         p_inj=U.pressure(2881, "psi"),

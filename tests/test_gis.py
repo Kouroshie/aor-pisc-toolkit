@@ -200,10 +200,10 @@ def test_penetration_csv_reads_latlon(tmp_path):
 def test_foot_based_crs_is_converted_to_metres():
     """A State Plane or BLM zone quoted in US survey feet must not scale the model.
 
-    Operators commonly pin the model to a foot-based CRS (a storage project may use
-    EPSG:32064, NAD27 / BLM 14N ftUS). Treating its eastings as metres would
-    inflate every distance by 3.28 and every area by 10.8, and nothing else in
-    the toolkit would notice.
+    Operators commonly pin the model to a foot-based CRS such as EPSG:32064,
+    NAD27 / BLM 14N ftUS. Treating its eastings as metres would inflate every
+    distance by 3.28 and every area by 10.8, and nothing else in the toolkit
+    would notice. The coordinates below are synthetic.
     """
     from containment.io.exporters import _axis_metres
 

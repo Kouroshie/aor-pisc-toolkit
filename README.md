@@ -365,7 +365,7 @@ Run `pytest`. The suite checks, among other things:
   volume balance `dP = dV / (V_pore . c_t)`;
 - Theis superposition reproduces the exponential-integral solution;
 - EPA Method 1 reproduces a published Class VI application's threshold
-  pressure (714 psi at a published Class VI applicant's the first injector) to the psi;
+  pressure (714 psi at its first injector) to the psi;
 - EPA Method 2's numerical variable-density variant collapses to Eq-3 for a
   constant-density column;
 - Buckley-Leverett Welge construction, unit round-trips, image-well
